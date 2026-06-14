@@ -48,8 +48,8 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
     <div className="upload-panel">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Step 2</span>
-          <h2>Photo import</h2>
+          <span className="soft-kicker">Photo import</span>
+          <h2>Add travel photos</h2>
         </div>
         <button
           className="secondary-action"
