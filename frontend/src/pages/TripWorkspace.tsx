@@ -11,7 +11,6 @@ import {
   type AnalysisJob,
   type AskResponse,
   type HealthResponse,
-  type Photo,
   type Trip,
   type TripDetail
 } from "../api/client";
@@ -32,7 +31,6 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [selectedTripDetail, setSelectedTripDetail] = useState<TripDetail | null>(null);
-  const [photos, setPhotos] = useState<Photo[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState<number | null>(null);
   const [spotlightPhotoId, setSpotlightPhotoId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<MemoryView>("story");
@@ -47,6 +45,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     () => selectedTripDetail ?? trips.find((trip) => trip.id === selectedTripId) ?? null,
     [selectedTripDetail, selectedTripId, trips]
   );
+  const photos = selectedTripDetail?.photos ?? [];
   const selectedPhoto = useMemo(
     () => photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0] ?? null,
     [photos, selectedPhotoId]
@@ -59,7 +58,6 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
   useEffect(() => {
     if (selectedTripId === null) {
-      setPhotos([]);
       setSelectedTripDetail(null);
       return;
     }
@@ -92,38 +90,58 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     (photo) => photo.latitude !== null && photo.longitude !== null
   ).length;
 
-  async function refreshTrips() {
+  async function runAction(
+    action: () => Promise<void>,
+    options: { trackBusy?: boolean; clearMessage?: boolean } = {}
+  ) {
+    const trackBusy = options.trackBusy ?? true;
+    const clearMessage = options.clearMessage ?? true;
+    if (trackBusy) {
+      setBusy(true);
+    }
     try {
-      const payload = await listTrips();
-      setTrips(payload);
-      setSelectedTripId((current) => current ?? payload[0]?.id ?? null);
-      setMessage(null);
+      await action();
+      if (clearMessage) {
+        setMessage(null);
+      }
     } catch (error) {
       setMessage((error as Error).message);
+    } finally {
+      if (trackBusy) {
+        setBusy(false);
+      }
     }
   }
 
+  async function loadTrips() {
+    const payload = await listTrips();
+    setTrips(payload);
+    setSelectedTripId((current) => current ?? payload[0]?.id ?? null);
+  }
+
+  async function refreshTrips() {
+    await runAction(loadTrips, { trackBusy: false });
+  }
+
+  async function loadTripDetail(tripId: number) {
+    const payload = await getTrip(tripId);
+    setSelectedTripDetail(payload);
+    setTrips((current) =>
+      current.map((trip) =>
+        trip.id === payload.id
+          ? {
+              id: payload.id,
+              title: payload.title,
+              description: payload.description,
+              created_at: payload.created_at
+            }
+          : trip
+      )
+    );
+  }
+
   async function refreshTripDetail(tripId: number) {
-    try {
-      const payload = await getTrip(tripId);
-      setSelectedTripDetail(payload);
-      setPhotos(payload.photos);
-      setTrips((current) =>
-        current.map((trip) =>
-          trip.id === payload.id
-            ? {
-                id: payload.id,
-                title: payload.title,
-                description: payload.description,
-                created_at: payload.created_at
-              }
-            : trip
-        )
-      );
-      setMessage(null);
-    } catch (error) {
-      setMessage((error as Error).message);
-    }
+    await runAction(() => loadTripDetail(tripId), { trackBusy: false });
   }
 
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
@@ -131,8 +149,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     if (!title.trim()) {
       return;
     }
-    setBusy(true);
-    try {
+    await runAction(async () => {
       const trip = await createTrip({
         title: title.trim(),
         description: description.trim() || null
@@ -140,7 +157,6 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       setTrips((current) => [trip, ...current]);
       setSelectedTripId(trip.id);
       setSelectedTripDetail(null);
-      setPhotos([]);
       setSelectedPhotoId(null);
       setSpotlightPhotoId(null);
       setAskResponse(null);
@@ -148,85 +164,57 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       setActiveView("story");
       setTitle("");
       setDescription("");
-      setMessage(null);
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function handleUpload(files: FileList | File[]) {
     if (selectedTripId === null || files.length === 0) {
       return;
     }
-    setBusy(true);
-    try {
+    await runAction(async () => {
       await uploadPhotos(selectedTripId, files);
-      await refreshTripDetail(selectedTripId);
+      await loadTripDetail(selectedTripId);
       setAskResponse(null);
-      setMessage(null);
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function handleAnalyze() {
     if (selectedTripId === null) {
       return;
     }
-    setBusy(true);
-    try {
+    await runAction(async () => {
       const job = await analyzeTrip(selectedTripId);
       setActiveJob(job);
       setAskResponse(null);
       setActiveView("story");
-      setMessage(null);
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function handleAsk(question: string) {
     if (selectedTripId === null || !canAsk) {
       return;
     }
-    setBusy(true);
-    try {
+    await runAction(async () => {
       const response = await askTrip(selectedTripId, question);
       setAskResponse(response);
-      setMessage(null);
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function pollJob(jobId: number) {
-    try {
+    await runAction(async () => {
       const job = await getJob(jobId);
       setActiveJob(job);
       if (job.status === "completed") {
-        await refreshTripDetail(job.trip_id);
+        await loadTripDetail(job.trip_id);
         setActiveView("story");
       }
       if (job.status === "failed") {
         setMessage(job.error ?? "Analysis failed");
       }
-    } catch (error) {
-      setMessage((error as Error).message);
-    }
+    }, { trackBusy: false, clearMessage: false });
   }
 
   function handleSelectPhoto(photoId: number) {
-    if (!photos.some((photo) => photo.id === photoId)) {
-      return;
-    }
     setSelectedPhotoId(photoId);
     setSpotlightPhotoId(photoId);
     window.setTimeout(() => {

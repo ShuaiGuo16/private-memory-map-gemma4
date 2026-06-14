@@ -82,7 +82,7 @@ export type AskResponse = {
 export type AnalysisJob = {
   id: number;
   trip_id: number;
-  status: "queued" | "running" | "completed" | "failed" | string;
+  status: "queued" | "running" | "completed" | "failed";
   current_step: string;
   completed_steps: number;
   total_steps: number;
@@ -112,10 +112,6 @@ export async function createTrip(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-}
-
-export async function listPhotos(tripId: number): Promise<Photo[]> {
-  return request<Photo[]>(`/api/trips/${tripId}/photos`);
 }
 
 export async function uploadPhotos(
