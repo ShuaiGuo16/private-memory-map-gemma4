@@ -1,25 +1,68 @@
-# Private Memory Map with Local Gemma 4
+# Private Memory Map
 
-This repository is a technical blog demo about building a local-first LLM
-workflow with Gemma 4. The app lets a user upload travel photos, preserve local
-metadata, run local Gemma analysis, and browse trip memories through a map,
-timeline, photo detail view, trip summary, and grounded Q&A panel.
+Private Memory Map is a local-first travel memory app. It helps you turn a
+folder of trip photos into a private, searchable memory workspace with a map,
+timeline, photo memories, trip synthesis, and grounded Q&A.
 
-The first version focuses on the full-stack shape:
+The app is built around a simple privacy promise: your photos, metadata,
+database, and Gemma workflow run locally. The current implementation uses a
+FastAPI backend, SQLite metadata store, local image uploads, a React workspace,
+and an Ollama-hosted Gemma vision model.
+
+## What It Does
+
+- Create trips and attach notes.
+- Upload travel photos to local storage.
+- Extract EXIF timestamps and GPS coordinates when available.
+- Show precise map pins only when coordinates exist in metadata.
+- Run a fixed Gemma workflow to analyze photos and synthesize trip memory.
+- Browse generated captions, scenes, moods, objects, activities, sensory
+  details, interest signals, and uncertainty notes.
+- Ask trip-level questions and receive answers grounded in evidence photo IDs.
+
+## Product Shape
+
+Private Memory Map is not a social travel app and not a cloud photo library. It
+is a private memory workstation for looking back at personal trips.
+
+The core experience is:
 
 ```text
-photo upload
-  -> EXIF extraction
-  -> SQLite metadata
-  -> local image storage
-  -> explicit Analyze action
-  -> background Gemma workflow
-  -> photo memories and trip synthesis
-  -> grounded Q&A with evidence photo IDs
+Create a trip
+  -> Import photos
+  -> Review map and timeline
+  -> Run local Gemma analysis
+  -> Read generated memories
+  -> Ask grounded questions about the trip
 ```
 
-This is not an agent demo. Python controls the sequence and Gemma is called at
-fixed checkpoints for image understanding, trip synthesis, and grounded Q&A.
+The app intentionally avoids guessing precise locations from image content.
+Map coordinates come from EXIF/GPS metadata only. Gemma can describe visible
+places and scenes, but it should not invent exact dates, events, or coordinates.
+
+## Local LLM Workflow
+
+The Gemma integration is a deterministic workflow, not an agent.
+
+Python controls the sequence:
+
+1. Load stored photo records and metadata.
+2. Resize image payloads for local model input.
+3. Call Gemma for structured photo analysis.
+4. Validate and store the model output.
+5. Call Gemma for trip-level synthesis.
+6. Call Gemma for grounded Q&A using stored photo analyses and trip memory.
+
+Gemma performs the reasoning at fixed checkpoints. It does not choose tools,
+call APIs, or control application flow.
+
+Each LLM step follows the same pattern:
+
+- System instruction
+- Prompt builder
+- Structured output schema
+
+The workflow code lives in `backend/app/workflows/`.
 
 ## Repository Layout
 
@@ -30,18 +73,37 @@ backend/
     core/             settings and runtime paths
     db/               SQLModel database setup and tables
     schemas/          request and response models
-    services/         upload, EXIF, vision, and memory services
+    services/         upload, EXIF, storage, and model adapters
     workflows/        prompts, schemas, and deterministic Gemma workflow
-  tests/              backend smoke tests
+  tests/              backend tests
 frontend/
   src/
     api/              typed API client
     app/              top-level React app
-    components/       upload, map, timeline, photo, insights panels
-    pages/            first-screen workspace
-archive/
-  local_agent_ml_workflow/
+    components/       upload, map, timeline, photo, and insights UI
+    pages/            main trip workspace
+scripts/              local reset and real-model smoke utilities
+ollama_modelfiles/    local model setup assets
 ```
+
+Runtime files are ignored by git:
+
+```text
+backend/local_data/private_memory_map.db
+backend/local_data/uploads/
+frontend/node_modules/
+frontend/dist/
+```
+
+## Requirements
+
+- Python 3.12+
+- Node.js 20+
+- Ollama
+- A local Gemma vision model, configured by default as `gemma4:e4b-128k`
+
+The app can be built and tested without running the real local model. Automated
+backend tests use fake Gemma clients.
 
 ## Setup
 
@@ -54,7 +116,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Install the frontend dependencies:
+Install frontend dependencies:
 
 ```powershell
 cd frontend
@@ -79,10 +141,28 @@ npm run dev
 
 Open the Vite URL, usually `http://localhost:5173`.
 
-Runtime data is written under `backend/local_data/` and is ignored by git.
+The Analyze button starts a local background job. The frontend polls job
+progress and refreshes the trip when analysis completes.
 
-The Analyze button starts a local background job. The frontend polls the job
-until it completes, then reloads the trip memory.
+## Configuration
+
+Common environment variables:
+
+```text
+PMM_GEMMA_MODEL=gemma4:e4b-128k
+PMM_WORKFLOW_TEMPERATURE=0
+PMM_WORKFLOW_NUM_CTX=32768
+PMM_WORKFLOW_MAX_IMAGE_EDGE_PX=1280
+PMM_WORKFLOW_RETRY_INVALID_JSON=1
+PMM_WORKFLOW_MAX_QA_PHOTOS=60
+PMM_PROMPT_VERSION=travel-memory-v1
+```
+
+Frontend API base URL:
+
+```text
+VITE_API_BASE_URL=http://localhost:8000
+```
 
 ## Test
 
@@ -107,14 +187,16 @@ Reset the local SQLite database and uploaded files:
 .\.venv\Scripts\python scripts\reset_local_data.py --yes
 ```
 
-Run the real Gemma workflow against one image. This depends on the local Ollama
-model and is intentionally not part of automated tests:
+Run the real Gemma workflow against one image:
 
 ```powershell
 .\.venv\Scripts\python scripts\smoke_test_real_workflow.py C:\path\to\travel-photo.jpg
 ```
 
-## Current API Surface
+The smoke script depends on local model availability and hardware speed, so it
+is not part of automated tests.
+
+## API Surface
 
 - `GET /api/health`
 - `POST /api/trips`
@@ -127,10 +209,6 @@ model and is intentionally not part of automated tests:
 - `GET /api/jobs/{job_id}`
 - `POST /api/trips/{trip_id}/ask`
 
-## Local Gemma Notes
+## License
 
-The Ollama setup notes and Modelfiles are kept at the repository root because
-they are still useful for the Gemma 4 workflow:
-
-- `model_setup.md`
-- `ollama_modelfiles/`
+MIT
