@@ -4,6 +4,7 @@ import {
   MapPin,
   MoreHorizontal,
   Pin,
+  RotateCcw,
   Sparkles
 } from "lucide-react";
 import {
@@ -22,11 +23,16 @@ type TripCoverProps = {
   photoCount: number;
   locatedCount: number;
   analyzedCount: number;
+  missingAnalysisCount: number;
+  backendReady: boolean;
   analyzeDisabled: boolean;
   job: AnalysisJob | null;
-  onAnalyze: () => void;
+  onAnalyze: (mode: "all" | "missing") => void;
+  onCancelJob: () => void;
+  onRetryJob: () => void;
   onSetCover: (photoId: number) => void;
-  onExport: () => void;
+  onExportMarkdown: () => void;
+  onExportZip: () => void;
 };
 
 export function TripCover({
@@ -37,11 +43,16 @@ export function TripCover({
   photoCount,
   locatedCount,
   analyzedCount,
+  missingAnalysisCount,
+  backendReady,
   analyzeDisabled,
   job,
   onAnalyze,
+  onCancelJob,
+  onRetryJob,
   onSetCover,
-  onExport
+  onExportMarkdown,
+  onExportZip
 }: TripCoverProps) {
   const title = trip?.title ?? "Start a private trip";
   const description =
@@ -49,11 +60,17 @@ export function TripCover({
     (photoCount > 0
       ? "Your photos are ready. Develop them into a private trip memory."
       : "Import travel photos to begin building a local memory map.");
+  const running = job && (job.status === "queued" || job.status === "running" || job.status === "cancel_requested");
+  const primaryMode = analyzedCount > 0 && missingAnalysisCount > 0 ? "missing" : "all";
   const buttonLabel =
     photoCount === 0
       ? "Add photos first"
-      : job && (job.status === "queued" || job.status === "running")
+      : running
         ? "Developing..."
+        : !backendReady
+          ? "Backend offline"
+          : analyzedCount > 0 && missingAnalysisCount > 0
+            ? "Develop new photos"
         : analyzedCount > 0
           ? "Develop again"
           : "Develop memories";
@@ -96,7 +113,7 @@ export function TripCover({
             className="cover-primary"
             type="button"
             disabled={analyzeDisabled}
-            onClick={onAnalyze}
+            onClick={() => onAnalyze(primaryMode)}
           >
             <Sparkles size={17} aria-hidden="true" />
             <span>{buttonLabel}</span>
@@ -115,9 +132,23 @@ export function TripCover({
                   <Pin size={15} aria-hidden="true" />
                   <span>Use selected photo as cover</span>
                 </button>
-                <button type="button" onClick={onExport}>
+                {analyzedCount > 0 && missingAnalysisCount > 0 ? (
+                  <button
+                    type="button"
+                    disabled={analyzeDisabled}
+                    onClick={() => onAnalyze("all")}
+                  >
+                    <RotateCcw size={15} aria-hidden="true" />
+                    <span>Develop all photos again</span>
+                  </button>
+                ) : null}
+                <button type="button" onClick={onExportMarkdown}>
                   <Download size={15} aria-hidden="true" />
-                  <span>{analyzedCount > 0 ? "Export memory" : "Export trip"}</span>
+                  <span>Export Markdown</span>
+                </button>
+                <button type="button" onClick={onExportZip}>
+                  <Download size={15} aria-hidden="true" />
+                  <span>Export ZIP dossier</span>
                 </button>
               </div>
             </details>
@@ -139,13 +170,29 @@ export function TripCover({
           ))}
         </div>
       ) : null}
-      {job ? <CoverJob job={job} /> : null}
+      {job ? (
+        <CoverJob
+          job={job}
+          onCancelJob={onCancelJob}
+          onRetryJob={onRetryJob}
+        />
+      ) : null}
     </section>
   );
 }
 
-function CoverJob({ job }: { job: AnalysisJob }) {
+function CoverJob({
+  job,
+  onCancelJob,
+  onRetryJob
+}: {
+  job: AnalysisJob;
+  onCancelJob: () => void;
+  onRetryJob: () => void;
+}) {
   const percent = jobPercent(job);
+  const running = job.status === "queued" || job.status === "running";
+  const retryable = job.status === "failed" || job.status === "canceled";
   return (
     <div className={`cover-job ${job.status}`}>
       <div>
@@ -154,6 +201,16 @@ function CoverJob({ job }: { job: AnalysisJob }) {
       </div>
       <progress max={100} value={percent} />
       {job.error ? <p>{job.error}</p> : null}
+      {running ? (
+        <button type="button" onClick={onCancelJob}>
+          Cancel
+        </button>
+      ) : null}
+      {retryable ? (
+        <button type="button" onClick={onRetryJob}>
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }

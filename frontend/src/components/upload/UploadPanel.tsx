@@ -1,13 +1,20 @@
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 import { ImagePlus, LockKeyhole, Upload } from "lucide-react";
+import type { PhotoImportResponse } from "../../api/client";
 
 type UploadPanelProps = {
   disabled: boolean;
   compact: boolean;
+  importResult: PhotoImportResponse | null;
   onUpload: (files: FileList | File[]) => void;
 };
 
-export function UploadPanel({ disabled, compact, onUpload }: UploadPanelProps) {
+export function UploadPanel({
+  disabled,
+  compact,
+  importResult,
+  onUpload
+}: UploadPanelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -87,6 +94,41 @@ export function UploadPanel({ disabled, compact, onUpload }: UploadPanelProps) {
           onChange={handleChange}
         />
       </label>
+      {importResult ? <ImportSummary result={importResult} /> : null}
+    </div>
+  );
+}
+
+function ImportSummary({ result }: { result: PhotoImportResponse }) {
+  return (
+    <div className="import-summary">
+      <div>
+        <span>
+          <strong>{result.stored_count}</strong>
+          Stored
+        </span>
+        <span>
+          <strong>{result.duplicate_count}</strong>
+          Skipped
+        </span>
+        <span>
+          <strong>{result.rejected_count}</strong>
+          Rejected
+        </span>
+      </div>
+      {result.results.some((item) => item.status !== "stored") ? (
+        <ul>
+          {result.results
+            .filter((item) => item.status !== "stored")
+            .slice(0, 4)
+            .map((item) => (
+              <li key={`${item.filename}-${item.status}`}>
+                <strong>{item.filename}</strong>
+                <span>{item.detail ?? item.status}</span>
+              </li>
+            ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

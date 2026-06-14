@@ -13,6 +13,7 @@ import type {
   AskResponse,
   HealthResponse,
   Photo,
+  TripQuestion,
   TripMemory
 } from "../../api/client";
 import { assetUrl } from "../../api/client";
@@ -25,11 +26,13 @@ type MemoryCompanionProps = {
   job: AnalysisJob | null;
   tripMemory: TripMemory | null;
   askResponse: AskResponse | null;
+  questions: TripQuestion[];
   photos: Photo[];
   exportDisabled: boolean;
   onAsk: (question: string) => void;
   onSelectEvidence: (photoId: number) => void;
-  onExport: () => void;
+  onExportMarkdown: () => void;
+  onExportZip: () => void;
 };
 
 export function MemoryCompanion({
@@ -39,11 +42,13 @@ export function MemoryCompanion({
   job,
   tripMemory,
   askResponse,
+  questions,
   photos,
   exportDisabled,
   onAsk,
   onSelectEvidence,
-  onExport
+  onExportMarkdown,
+  onExportZip
 }: MemoryCompanionProps) {
   const [question, setQuestion] = useState("What did I seem drawn to on this trip?");
   const prompts = [
@@ -67,15 +72,19 @@ export function MemoryCompanion({
             <span className="soft-kicker">Ask this trip</span>
             <h2>Talk to your memories</h2>
           </div>
-          <button
-            className="companion-icon-action"
-            type="button"
-            disabled={exportDisabled}
-            onClick={onExport}
-            title="Export memory"
-          >
-            <Download size={16} aria-hidden="true" />
-          </button>
+          <details className="companion-export-menu">
+            <summary aria-label="Export memory">
+              <Download size={16} aria-hidden="true" />
+            </summary>
+            <div>
+              <button type="button" disabled={exportDisabled} onClick={onExportMarkdown}>
+                Markdown
+              </button>
+              <button type="button" disabled={exportDisabled} onClick={onExportZip}>
+                ZIP dossier
+              </button>
+            </div>
+          </details>
         </div>
         <p>
           {health ? (
@@ -160,6 +169,22 @@ export function MemoryCompanion({
           </div>
         )}
       </div>
+
+      {questions.length > 0 ? (
+        <div className="question-history">
+          <span className="soft-kicker">Asked before</span>
+          {questions.slice(-3).reverse().map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setQuestion(item.question)}
+            >
+              <strong>{item.question}</strong>
+              <span>{item.answer}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <details className="local-facts">
         <summary>Local facts</summary>

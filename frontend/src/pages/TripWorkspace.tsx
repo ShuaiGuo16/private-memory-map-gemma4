@@ -1,20 +1,29 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { RotateCcw, Save, Search, SlidersHorizontal, Trash2, Plus } from "lucide-react";
 import {
   analyzeTrip,
   askTrip,
+  cancelJob,
+  clearTripAnalysis,
   createTrip,
+  deletePhoto,
+  deleteTrip,
   exportTripMarkdown,
+  exportTripZip,
   getJob,
   getTrip,
+  importPhotos,
   listTrips,
+  retryJob,
   updatePhoto,
   updateTrip,
   updateTripMemory,
-  uploadPhotos,
+  type AnalyzeMode,
   type AnalysisJob,
   type AskResponse,
   type HealthResponse,
+  type Photo,
+  type PhotoImportResponse,
   type Trip,
   type TripDetail
 } from "../api/client";
@@ -24,6 +33,7 @@ import { PhotoMosaic } from "../components/photo/PhotoMosaic";
 import { MemoryStory } from "../components/story/MemoryStory";
 import { TripCover } from "../components/story/TripCover";
 import { type MemoryView, ViewSwitcher } from "../components/story/ViewSwitcher";
+import { MemoryTimeline } from "../components/timeline/MemoryTimeline";
 import { UploadPanel } from "../components/upload/UploadPanel";
 
 type TripWorkspaceProps = {
@@ -32,6 +42,7 @@ type TripWorkspaceProps = {
 };
 
 type TripStage = "empty" | "needsPhotos" | "readyToDevelop" | "memoryReady";
+type FilterKey = "favorites" | "mapped" | "noGps" | "analyzed" | "needsAnalysis" | "uncertain";
 
 export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -48,6 +59,20 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [activeJob, setActiveJob] = useState<AnalysisJob | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
+  const [importResult, setImportResult] = useState<PhotoImportResponse | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<Record<FilterKey, boolean>>({
+    favorites: false,
+    mapped: false,
+    noGps: false,
+    analyzed: false,
+    needsAnalysis: false,
+    uncertain: false
+  });
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const selectedTrip = useMemo(
     () => selectedTripDetail ?? trips.find((trip) => trip.id === selectedTripId) ?? null,
@@ -64,6 +89,19 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     photos.find((photo) => photo.analysis) ??
     photos[0] ??
     null;
+
+  const filteredPhotos = useMemo(
+    () =>
+      filterPhotos({
+        photos,
+        trip: selectedTripDetail,
+        query: searchQuery,
+        filters,
+        dateFrom,
+        dateTo
+      }),
+    [photos, selectedTripDetail, searchQuery, filters, dateFrom, dateTo]
+  );
 
   useEffect(() => {
     void refreshTrips();
@@ -82,6 +120,11 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     }
     void refreshTripDetail(selectedTripId);
   }, [selectedTripId]);
+
+  useEffect(() => {
+    setEditTitle(selectedTrip?.title ?? "");
+    setEditDescription(selectedTrip?.description ?? "");
+  }, [selectedTrip?.id, selectedTrip?.title, selectedTrip?.description]);
 
   useEffect(() => {
     if (photos.length > 0 && !photos.some((photo) => photo.id === selectedPhotoId)) {
@@ -105,7 +148,11 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const hasAnalyzedPhotos = photos.some((photo) => photo.analysis !== null);
   const canAsk = Boolean(selectedTripDetail?.memory && hasAnalyzedPhotos);
   const analyzedCount = photos.filter((photo) => photo.analysis !== null).length;
+  const missingAnalysisCount = photos.length - analyzedCount;
   const locatedCount = photos.filter(
+    (photo) => photo.latitude !== null && photo.longitude !== null
+  ).length;
+  const filteredLocatedCount = filteredPhotos.filter(
     (photo) => photo.latitude !== null && photo.longitude !== null
   ).length;
   const tripStage = getTripStage(selectedTripId, photos.length, hasAnalyzedPhotos);
@@ -195,21 +242,43 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       return;
     }
     await runAction(async () => {
-      await uploadPhotos(selectedTripId, files);
+      const result = await importPhotos(selectedTripId, files);
+      setImportResult(result);
       await loadTripDetail(selectedTripId);
       setAskResponse(null);
     });
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze(mode: AnalyzeMode = "all") {
     if (selectedTripId === null) {
       return;
     }
     await runAction(async () => {
-      const job = await analyzeTrip(selectedTripId);
+      const job = await analyzeTrip(selectedTripId, mode);
       setActiveJob(job);
       setAskResponse(null);
       setActiveView("story");
+    });
+  }
+
+  async function handleCancelJob() {
+    if (activeJob === null) {
+      return;
+    }
+    await runAction(async () => {
+      const job = await cancelJob(activeJob.id);
+      setActiveJob(job);
+    }, { trackBusy: false, clearMessage: false });
+  }
+
+  async function handleRetryJob() {
+    if (activeJob === null) {
+      return;
+    }
+    await runAction(async () => {
+      const job = await retryJob(activeJob.id);
+      setActiveJob(job);
+      setAskResponse(null);
     });
   }
 
@@ -220,6 +289,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     await runAction(async () => {
       const response = await askTrip(selectedTripId, question);
       setAskResponse(response);
+      await loadTripDetail(selectedTripId);
     });
   }
 
@@ -268,13 +338,96 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     });
   }
 
-  async function handleExport() {
+  async function handleSaveTripDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (selectedTripId === null || !editTitle.trim()) {
+      return;
+    }
+    await runAction(async () => {
+      await updateTrip(selectedTripId, {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null
+      });
+      await loadTripDetail(selectedTripId);
+    });
+  }
+
+  async function handleDeleteSelectedPhoto() {
+    if (selectedPhoto === null) {
+      return;
+    }
+    const ok = window.confirm(
+      `Delete ${selectedPhoto.filename}? This removes the local image file and its memory.`
+    );
+    if (!ok) {
+      return;
+    }
+    await runAction(async () => {
+      await deletePhoto(selectedPhoto.id);
+      if (selectedTripId !== null) {
+        await loadTripDetail(selectedTripId);
+      }
+      setSelectedPhotoId(null);
+      setAskResponse(null);
+    });
+  }
+
+  async function handleClearAnalysis() {
+    if (selectedTripId === null) {
+      return;
+    }
+    const ok = window.confirm(
+      "Clear generated memories for this trip? Photos, favorites, and notes stay local."
+    );
+    if (!ok) {
+      return;
+    }
+    await runAction(async () => {
+      await clearTripAnalysis(selectedTripId);
+      await loadTripDetail(selectedTripId);
+      setAskResponse(null);
+      setActiveJob(null);
+    });
+  }
+
+  async function handleDeleteTrip() {
+    if (selectedTripId === null || selectedTrip === null) {
+      return;
+    }
+    const ok = window.confirm(
+      `Delete "${selectedTrip.title}"? This removes its database records and uploaded local files.`
+    );
+    if (!ok) {
+      return;
+    }
+    await runAction(async () => {
+      await deleteTrip(selectedTripId);
+      setSelectedTripDetail(null);
+      setSelectedTripId(null);
+      setSelectedPhotoId(null);
+      setAskResponse(null);
+      setActiveJob(null);
+      await loadTrips();
+    });
+  }
+
+  async function handleExportMarkdown() {
     if (selectedTripId === null) {
       return;
     }
     await runAction(async () => {
       const exported = await exportTripMarkdown(selectedTripId);
       downloadMarkdown(exported.filename, exported.content);
+    });
+  }
+
+  async function handleExportZip() {
+    if (selectedTripId === null) {
+      return;
+    }
+    await runAction(async () => {
+      const exported = await exportTripZip(selectedTripId);
+      downloadBlob(exported.filename, exported.blob);
     });
   }
 
@@ -285,6 +438,9 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       if (job.status === "completed") {
         await loadTripDetail(job.trip_id);
         setActiveView("story");
+      }
+      if (job.status === "canceled") {
+        setMessage("Analysis canceled");
       }
       if (job.status === "failed") {
         setMessage(job.error ?? "Analysis failed");
@@ -310,6 +466,18 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     setAskResponse(null);
     setActiveJob(null);
     setIsRefining(false);
+    setImportResult(null);
+    setSearchQuery("");
+    setFilters({
+      favorites: false,
+      mapped: false,
+      noGps: false,
+      analyzed: false,
+      needsAnalysis: false,
+      uncertain: false
+    });
+    setDateFrom("");
+    setDateTo("");
     setActiveView("story");
   }
 
@@ -387,11 +555,39 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           </div>
         </div>
 
+        {selectedTrip ? (
+          <button
+            className={`rail-refine-toggle ${isRefining ? "active" : ""}`}
+            type="button"
+            onClick={() => setIsRefining((current) => !current)}
+          >
+            <SlidersHorizontal size={14} aria-hidden="true" />
+            <span>{isRefining ? "Reading mode" : "Refine trip"}</span>
+          </button>
+        ) : null}
+
         <UploadPanel
           disabled={selectedTripId === null || busy || analysisRunning}
           compact={tripStage === "memoryReady"}
+          importResult={importResult}
           onUpload={handleUpload}
         />
+
+        {selectedTrip && isRefining ? (
+          <TripManagePanel
+            title={editTitle}
+            description={editDescription}
+            busy={busy}
+            hasAnalysis={hasAnalyzedPhotos || Boolean(selectedTripDetail?.memory)}
+            selectedPhoto={selectedPhoto}
+            onTitleChange={setEditTitle}
+            onDescriptionChange={setEditDescription}
+            onSave={handleSaveTripDetails}
+            onDeletePhoto={handleDeleteSelectedPhoto}
+            onClearAnalysis={handleClearAnalysis}
+            onDeleteTrip={handleDeleteTrip}
+          />
+        ) : null}
       </aside>
 
       <main className="memory-reader">
@@ -403,19 +599,56 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           photoCount={photos.length}
           locatedCount={locatedCount}
           analyzedCount={analyzedCount}
+          missingAnalysisCount={missingAnalysisCount}
+          backendReady={Boolean(health)}
           analyzeDisabled={
-            selectedTripId === null || busy || analysisRunning || photos.length === 0
+            selectedTripId === null ||
+            busy ||
+            analysisRunning ||
+            photos.length === 0 ||
+            !health
           }
           job={activeJob}
           onAnalyze={handleAnalyze}
+          onCancelJob={handleCancelJob}
+          onRetryJob={handleRetryJob}
           onSetCover={handleSetCover}
-          onExport={handleExport}
+          onExportMarkdown={handleExportMarkdown}
+          onExportZip={handleExportZip}
         />
 
         <ViewSwitcher
           activeView={activeView}
           photoCount={photos.length}
           onChange={setActiveView}
+        />
+
+        <SearchFilters
+          query={searchQuery}
+          filters={filters}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          resultCount={filteredPhotos.length}
+          totalCount={photos.length}
+          onQueryChange={setSearchQuery}
+          onFilterChange={(key) =>
+            setFilters((current) => ({ ...current, [key]: !current[key] }))
+          }
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          onClear={() => {
+            setSearchQuery("");
+            setDateFrom("");
+            setDateTo("");
+            setFilters({
+              favorites: false,
+              mapped: false,
+              noGps: false,
+              analyzed: false,
+              needsAnalysis: false,
+              uncertain: false
+            });
+          }}
         />
 
         <div className="memory-surface">
@@ -438,6 +671,15 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
             />
           ) : null}
 
+          {activeView === "timeline" ? (
+            <MemoryTimeline
+              photos={filteredPhotos}
+              selectedPhotoId={selectedPhoto?.id ?? null}
+              spotlightPhotoId={spotlightPhotoId}
+              onSelectPhoto={handleSelectPhoto}
+            />
+          ) : null}
+
           {activeView === "map" ? (
             <section className="map-view">
               <div className="section-heading">
@@ -448,20 +690,20 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               </div>
               <div className="map-stat-row">
                 <span>
-                  <strong>{photos.length}</strong>
+                  <strong>{filteredPhotos.length}</strong>
                   Photos
                 </span>
                 <span>
-                  <strong>{locatedCount}</strong>
+                  <strong>{filteredLocatedCount}</strong>
                   Mapped
                 </span>
                 <span>
-                  <strong>{photos.length - locatedCount}</strong>
+                  <strong>{filteredPhotos.length - filteredLocatedCount}</strong>
                   Without GPS
                 </span>
               </div>
               <MemoryMap
-                photos={photos}
+                photos={filteredPhotos}
                 selectedPhotoId={selectedPhoto?.id ?? null}
                 onSelectPhoto={handleSelectPhoto}
               />
@@ -470,7 +712,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
           {activeView === "photos" ? (
             <PhotoMosaic
-              photos={photos}
+              photos={filteredPhotos}
               selectedPhotoId={selectedPhoto?.id ?? null}
               spotlightPhotoId={spotlightPhotoId}
               coverPhotoId={selectedTrip?.cover_photo_id ?? null}
@@ -489,11 +731,13 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         job={activeJob}
         tripMemory={selectedTripDetail?.memory ?? null}
         askResponse={askResponse}
+        questions={selectedTripDetail?.questions ?? []}
         photos={photos}
         exportDisabled={selectedTripId === null || busy}
         onAsk={handleAsk}
         onSelectEvidence={handleSelectEvidence}
-        onExport={handleExport}
+        onExportMarkdown={handleExportMarkdown}
+        onExportZip={handleExportZip}
       />
 
       {message ? <div className="toast">{message}</div> : null}
@@ -502,7 +746,11 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 }
 
 function isActiveJob(job: AnalysisJob): boolean {
-  return job.status === "queued" || job.status === "running";
+  return (
+    job.status === "queued" ||
+    job.status === "running" ||
+    job.status === "cancel_requested"
+  );
 }
 
 function getTripStage(
@@ -519,10 +767,260 @@ function getTripStage(
   return hasAnalyzedPhotos ? "memoryReady" : "readyToDevelop";
 }
 
+function TripManagePanel({
+  title,
+  description,
+  busy,
+  hasAnalysis,
+  selectedPhoto,
+  onTitleChange,
+  onDescriptionChange,
+  onSave,
+  onDeletePhoto,
+  onClearAnalysis,
+  onDeleteTrip
+}: {
+  title: string;
+  description: string;
+  busy: boolean;
+  hasAnalysis: boolean;
+  selectedPhoto: Photo | null;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onDeletePhoto: () => void;
+  onClearAnalysis: () => void;
+  onDeleteTrip: () => void;
+}) {
+  return (
+    <div className="trip-manage-panel">
+      <span className="soft-kicker">Trip record</span>
+      <form onSubmit={onSave}>
+        <input
+          value={title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          placeholder="Trip title"
+        />
+        <textarea
+          value={description}
+          onChange={(event) => onDescriptionChange(event.target.value)}
+          placeholder="Trip description"
+          rows={3}
+        />
+        <button type="submit" disabled={busy || !title.trim()}>
+          <Save size={14} aria-hidden="true" />
+          <span>Save details</span>
+        </button>
+      </form>
+      <div className="danger-actions">
+        <button type="button" disabled={busy || !selectedPhoto} onClick={onDeletePhoto}>
+          <Trash2 size={14} aria-hidden="true" />
+          <span>Delete selected photo</span>
+        </button>
+        <button type="button" disabled={busy || !hasAnalysis} onClick={onClearAnalysis}>
+          <RotateCcw size={14} aria-hidden="true" />
+          <span>Clear analysis</span>
+        </button>
+        <button type="button" disabled={busy} onClick={onDeleteTrip}>
+          <Trash2 size={14} aria-hidden="true" />
+          <span>Delete trip and files</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SearchFilters({
+  query,
+  filters,
+  dateFrom,
+  dateTo,
+  resultCount,
+  totalCount,
+  onQueryChange,
+  onFilterChange,
+  onDateFromChange,
+  onDateToChange,
+  onClear
+}: {
+  query: string;
+  filters: Record<FilterKey, boolean>;
+  dateFrom: string;
+  dateTo: string;
+  resultCount: number;
+  totalCount: number;
+  onQueryChange: (value: string) => void;
+  onFilterChange: (key: FilterKey) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+  onClear: () => void;
+}) {
+  const active = query.trim() !== "" || Object.values(filters).some(Boolean) || dateFrom || dateTo;
+  const filterOptions: Array<{ key: FilterKey; label: string }> = [
+    { key: "favorites", label: "Kept" },
+    { key: "mapped", label: "Mapped" },
+    { key: "noGps", label: "No GPS" },
+    { key: "analyzed", label: "Remembered" },
+    { key: "needsAnalysis", label: "Needs analysis" },
+    { key: "uncertain", label: "Uncertain" }
+  ];
+
+  return (
+    <section className={`memory-search ${active ? "active" : ""}`}>
+      <label>
+        <Search size={15} aria-hidden="true" />
+        <input
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Search captions, notes, places, questions..."
+        />
+      </label>
+      <div className="filter-row">
+        {filterOptions.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={filters[option.key] ? "active" : ""}
+            onClick={() => onFilterChange(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div className="date-filter-row">
+        <label>
+          <span>From</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => onDateFromChange(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>To</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(event) => onDateToChange(event.target.value)}
+          />
+        </label>
+        <button type="button" disabled={!active} onClick={onClear}>
+          Clear
+        </button>
+        <em>
+          {resultCount} of {totalCount}
+        </em>
+      </div>
+    </section>
+  );
+}
+
+function filterPhotos({
+  photos,
+  trip,
+  query,
+  filters,
+  dateFrom,
+  dateTo
+}: {
+  photos: Photo[];
+  trip: TripDetail | null;
+  query: string;
+  filters: Record<FilterKey, boolean>;
+  dateFrom: string;
+  dateTo: string;
+}): Photo[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const tripMatches = normalizedQuery !== "" && trip !== null && tripText(trip).includes(normalizedQuery);
+  const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+  const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null;
+
+  return photos.filter((photo) => {
+    const analysis = photo.analysis;
+    const timestamp = new Date(photo.captured_at ?? photo.created_at);
+    if (from && timestamp < from) {
+      return false;
+    }
+    if (to && timestamp > to) {
+      return false;
+    }
+    if (filters.favorites && !photo.is_favorite) {
+      return false;
+    }
+    if (filters.mapped && (photo.latitude === null || photo.longitude === null)) {
+      return false;
+    }
+    if (filters.noGps && photo.latitude !== null && photo.longitude !== null) {
+      return false;
+    }
+    if (filters.analyzed && analysis === null) {
+      return false;
+    }
+    if (filters.needsAnalysis && analysis !== null) {
+      return false;
+    }
+    if (filters.uncertain && (analysis?.uncertainty_notes.length ?? 0) === 0) {
+      return false;
+    }
+    return normalizedQuery === "" || tripMatches || photoText(photo).includes(normalizedQuery);
+  });
+}
+
+function tripText(trip: TripDetail): string {
+  return [
+    trip.title,
+    trip.description,
+    trip.memory?.narrative_summary,
+    trip.memory?.user_narrative_summary,
+    trip.memory?.user_note,
+    ...(trip.memory?.inferred_interests ?? []),
+    ...(trip.memory?.recurring_themes ?? []),
+    ...(trip.memory?.memorable_moments.flatMap((moment) => [
+      moment.title,
+      moment.description
+    ]) ?? []),
+    ...trip.questions.flatMap((item) => [item.question, item.answer])
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function photoText(photo: Photo): string {
+  const analysis = photo.analysis;
+  return [
+    photo.filename,
+    analysis?.memory_caption,
+    analysis?.scene_summary,
+    analysis?.place_type,
+    analysis?.user_memory_caption,
+    analysis?.user_scene_summary,
+    analysis?.user_mood,
+    analysis?.user_note,
+    ...(analysis?.visible_activities ?? []),
+    ...(analysis?.visible_objects ?? []),
+    ...(analysis?.sensory_details ?? []),
+    ...(analysis?.inferred_interest_signals ?? []),
+    ...(analysis?.uncertainty_notes ?? [])
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 function downloadMarkdown(filename: string, content: string) {
   const url = URL.createObjectURL(
     new Blob([content], { type: "text/markdown;charset=utf-8" })
   );
+  downloadUrl(filename, url);
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  downloadUrl(filename, url);
+}
+
+function downloadUrl(filename: string, url: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;

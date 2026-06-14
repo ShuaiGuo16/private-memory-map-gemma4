@@ -464,6 +464,111 @@ p {
   display: none;
 }
 
+.import-summary {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.import-summary > div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.import-summary span {
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  display: grid;
+  font-size: 0.74rem;
+  padding: 8px;
+}
+
+.import-summary strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.import-summary ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.import-summary li {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.76rem;
+}
+
+.import-summary li strong {
+  font-size: 0.8rem;
+}
+
+.rail-refine-toggle {
+  align-items: center;
+  background: transparent;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 13px 8px 0;
+}
+
+.rail-refine-toggle.active {
+  color: var(--accent);
+}
+
+.trip-manage-panel {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.trip-manage-panel form,
+.danger-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.trip-manage-panel input,
+.trip-manage-panel textarea {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  padding: 10px 11px;
+  resize: vertical;
+  width: 100%;
+}
+
+.trip-manage-panel button,
+.danger-actions button {
+  align-items: center;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-soft);
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.danger-actions button:last-child {
+  background: #fff1ed;
+  border-color: #e6bfb4;
+  color: var(--danger);
+}
+
 .drop-zone {
   align-items: center;
   background: rgba(255, 254, 250, 0.74);
@@ -807,13 +912,22 @@ p {
   margin-top: 8px;
 }
 
+.cover-job button {
+  background: var(--ink);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.78rem;
+  margin-top: 10px;
+  padding: 6px 12px;
+}
+
 .view-switcher {
   background: rgba(255, 254, 250, 0.82);
   border: 1px solid rgba(216, 217, 210, 0.86);
   border-radius: var(--radius);
   display: grid;
   gap: 4px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 5px;
 }
 
@@ -864,6 +978,81 @@ p {
   font-style: normal;
 }
 
+.memory-search {
+  background: rgba(255, 254, 250, 0.72);
+  border: 1px solid rgba(216, 217, 210, 0.82);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.memory-search > label {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 40px;
+  padding: 0 10px;
+}
+
+.memory-search input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  min-width: 0;
+  outline: 0;
+}
+
+.filter-row,
+.date-filter-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.filter-row button,
+.date-filter-row button {
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.filter-row button.active {
+  background: rgba(143, 63, 45, 0.1);
+  border-color: rgba(143, 63, 45, 0.28);
+  color: var(--accent);
+}
+
+.date-filter-row label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.date-filter-row span,
+.date-filter-row em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+}
+
+.date-filter-row input {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
 .memory-surface,
 .story-view {
   display: grid;
@@ -874,6 +1063,7 @@ p {
 .selected-memory,
 .photo-memory-strip,
 .map-view,
+.timeline-view,
 .photos-view {
   background: rgba(255, 254, 250, 0.86);
   border: 1px solid rgba(216, 217, 210, 0.86);
@@ -1263,7 +1453,8 @@ p {
 }
 
 .empty-memory-card,
-.photos-view.empty {
+.photos-view.empty,
+.timeline-view.empty {
   align-items: center;
   color: var(--muted);
   display: flex;
@@ -1274,9 +1465,95 @@ p {
 }
 
 .empty-memory-card svg,
-.photos-view.empty svg {
+.photos-view.empty svg,
+.timeline-view.empty svg {
   color: var(--teal);
   flex: 0 0 auto;
+}
+
+.timeline-view {
+  display: grid;
+  gap: 18px;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 20px;
+}
+
+.timeline-day {
+  border-left: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+}
+
+.timeline-day h3 {
+  color: var(--gold);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.timeline-day button {
+  align-items: stretch;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  min-height: 104px;
+  padding: 8px;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.timeline-day button:hover {
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
+.timeline-day button.selected,
+.timeline-day button.spotlight {
+  border-color: rgba(143, 63, 45, 0.42);
+}
+
+.timeline-day img {
+  border-radius: 6px;
+  height: 100%;
+  object-fit: cover;
+  width: 92px;
+}
+
+.timeline-day button > span:not(.timeline-flags) {
+  display: grid;
+  gap: 4px;
+  padding: 5px 0;
+}
+
+.timeline-day em,
+.timeline-day small {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-style: normal;
+  gap: 4px;
+}
+
+.timeline-flags {
+  align-items: center;
+  align-self: start;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 0.76rem;
+  gap: 5px;
+  padding: 5px 4px;
 }
 
 .map-stat-row {
@@ -1619,6 +1896,56 @@ p {
   transform: translateY(-1px);
 }
 
+.companion-export-menu {
+  position: relative;
+}
+
+.companion-export-menu summary {
+  align-items: center;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: #51646a;
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  list-style: none;
+  width: 34px;
+}
+
+.companion-export-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.companion-export-menu div {
+  background: rgba(255, 254, 250, 0.98);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 4px;
+  min-width: 152px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 8;
+}
+
+.companion-export-menu button {
+  background: transparent;
+  border-radius: 7px;
+  color: var(--ink-soft);
+  min-height: 32px;
+  padding: 0 9px;
+  text-align: left;
+}
+
+.companion-export-menu button:hover:not(:disabled) {
+  background: #eef1f0;
+}
+
 .companion-heading p {
   align-items: center;
   display: inline-flex;
@@ -1749,6 +2076,34 @@ p {
   height: 22px;
   object-fit: cover;
   width: 22px;
+}
+
+.question-history {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding-top: 13px;
+}
+
+.question-history button {
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  text-align: left;
+}
+
+.question-history button span {
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 0.78rem;
+  line-clamp: 2;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .local-facts {
@@ -2027,6 +2382,7 @@ p {
   .selected-memory,
   .photo-memory-strip,
   .map-view,
+  .timeline-view,
   .photos-view {
     padding: 18px;
   }
@@ -2042,6 +2398,23 @@ p {
 
   .memory-photo-card {
     grid-template-columns: 1fr;
+  }
+
+  .timeline-day {
+    padding-left: 12px;
+  }
+
+  .timeline-day button {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .timeline-day img {
+    width: 76px;
+  }
+
+  .timeline-flags {
+    grid-column: 2;
+    padding: 0;
   }
 
   .selected-memory .memory-photo-card,

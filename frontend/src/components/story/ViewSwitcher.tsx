@@ -1,6 +1,6 @@
-import { BookOpenText, Images, Map } from "lucide-react";
+import { BookOpenText, Images, Map, Rows3 } from "lucide-react";
 
-export type MemoryView = "story" | "map" | "photos";
+export type MemoryView = "story" | "timeline" | "map" | "photos";
 
 type ViewSwitcherProps = {
   activeView: MemoryView;
@@ -14,6 +14,12 @@ const views = [
     label: "Story",
     description: "Reflections",
     icon: BookOpenText
+  },
+  {
+    id: "timeline",
+    label: "Timeline",
+    description: "Sequence",
+    icon: Rows3
   },
   {
     id: "map",

@@ -69,6 +69,9 @@ export type Photo = {
   filename: string;
   stored_path: string;
   image_url: string;
+  content_sha256: string | null;
+  byte_size: number | null;
+  mime_type: string | null;
   captured_at: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -78,9 +81,19 @@ export type Photo = {
   analysis: PhotoAnalysis | null;
 };
 
+export type TripQuestion = {
+  id: number;
+  trip_id: number;
+  question: string;
+  answer: string;
+  evidence_photo_ids: number[];
+  created_at: string;
+};
+
 export type TripDetail = Trip & {
   photos: Photo[];
   memory: TripMemory | null;
+  questions: TripQuestion[];
 };
 
 export type AskResponse = {
@@ -91,13 +104,36 @@ export type AskResponse = {
 export type AnalysisJob = {
   id: number;
   trip_id: number;
-  status: "queued" | "running" | "completed" | "failed";
+  status:
+    | "queued"
+    | "running"
+    | "cancel_requested"
+    | "canceled"
+    | "completed"
+    | "failed";
   current_step: string;
   completed_steps: number;
   total_steps: number;
+  mode: "all" | "missing";
   error: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type AnalyzeMode = "all" | "missing";
+
+export type PhotoImportResult = {
+  filename: string;
+  status: "stored" | "duplicate" | "rejected";
+  detail: string | null;
+  photo: Photo | null;
+};
+
+export type PhotoImportResponse = {
+  results: PhotoImportResult[];
+  stored_count: number;
+  duplicate_count: number;
+  rejected_count: number;
 };
 
 export async function getHealth(): Promise<HealthResponse> {
@@ -150,12 +186,39 @@ export async function uploadPhotos(
   });
 }
 
-export async function analyzeTrip(tripId: number): Promise<AnalysisJob> {
-  return request<AnalysisJob>(`/api/trips/${tripId}/analyze`, { method: "POST" });
+export async function importPhotos(
+  tripId: number,
+  files: FileList | File[]
+): Promise<PhotoImportResponse> {
+  const formData = new FormData();
+  Array.from(files).forEach((file) => formData.append("files", file));
+  return request<PhotoImportResponse>(`/api/trips/${tripId}/photos/import`, {
+    method: "POST",
+    body: formData
+  });
+}
+
+export async function analyzeTrip(
+  tripId: number,
+  mode: AnalyzeMode = "all"
+): Promise<AnalysisJob> {
+  return request<AnalysisJob>(`/api/trips/${tripId}/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode })
+  });
 }
 
 export async function getJob(jobId: number): Promise<AnalysisJob> {
   return request<AnalysisJob>(`/api/jobs/${jobId}`);
+}
+
+export async function cancelJob(jobId: number): Promise<AnalysisJob> {
+  return request<AnalysisJob>(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+}
+
+export async function retryJob(jobId: number): Promise<AnalysisJob> {
+  return request<AnalysisJob>(`/api/jobs/${jobId}/retry`, { method: "POST" });
 }
 
 export async function askTrip(
@@ -200,6 +263,18 @@ export async function updateTripMemory(
   });
 }
 
+export async function deleteTrip(tripId: number): Promise<void> {
+  await requestNoContent(`/api/trips/${tripId}`, { method: "DELETE" });
+}
+
+export async function deletePhoto(photoId: number): Promise<void> {
+  await requestNoContent(`/api/photos/${photoId}`, { method: "DELETE" });
+}
+
+export async function clearTripAnalysis(tripId: number): Promise<void> {
+  await requestNoContent(`/api/trips/${tripId}/analysis`, { method: "DELETE" });
+}
+
 export async function exportTripMarkdown(
   tripId: number
 ): Promise<{ filename: string; content: string }> {
@@ -211,6 +286,20 @@ export async function exportTripMarkdown(
   return {
     filename: attachmentFilename(response.headers.get("content-disposition")),
     content: await response.text()
+  };
+}
+
+export async function exportTripZip(
+  tripId: number
+): Promise<{ filename: string; blob: Blob }> {
+  const response = await fetch(`${API_BASE_URL}/api/trips/${tripId}/export.zip`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || response.statusText);
+  }
+  return {
+    filename: attachmentFilename(response.headers.get("content-disposition")),
+    blob: await response.blob()
   };
 }
 
@@ -233,4 +322,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail || response.statusText);
   }
   return response.json() as Promise<T>;
+}
+
+async function requestNoContent(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || response.statusText);
+  }
 }

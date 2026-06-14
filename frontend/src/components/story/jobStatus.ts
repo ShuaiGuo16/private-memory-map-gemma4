@@ -14,6 +14,12 @@ export function jobStage(job: AnalysisJob): string {
   if (job.status === "failed") {
     return "Needs attention";
   }
+  if (job.status === "canceled") {
+    return "Canceled";
+  }
+  if (job.status === "cancel_requested") {
+    return "Canceling";
+  }
   if (job.completed_steps <= 0) {
     return "Reading photos";
   }

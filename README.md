@@ -13,12 +13,19 @@ and an Ollama-hosted Gemma vision model.
 
 - Create trips and attach notes.
 - Upload travel photos to local storage.
+- Skip duplicate imports and report rejected files.
 - Extract EXIF timestamps and GPS coordinates when available.
 - Show precise map pins only when coordinates exist in metadata.
 - Run a fixed Gemma workflow to analyze photos and synthesize trip memory.
+- Analyze all photos or only newly imported photos.
 - Browse generated captions, scenes, moods, objects, activities, sensory
   details, interest signals, and uncertainty notes.
 - Ask trip-level questions and receive answers grounded in evidence photo IDs.
+- Search and filter local trip memories.
+- Edit trip details, favorite photos, choose a cover, clear analysis, and delete
+  local trips or photos.
+- Export Markdown or a self-contained ZIP dossier with HTML, metadata, and
+  copied photos.
 
 ## Product Shape
 
@@ -30,10 +37,12 @@ The core experience is:
 ```text
 Create a trip
   -> Import photos
+  -> Skip duplicates and review import results
   -> Review map and timeline
   -> Run local Gemma analysis
   -> Read generated memories
   -> Ask grounded questions about the trip
+  -> Refine, search, and export a private dossier
 ```
 
 The app intentionally avoids guessing precise locations from image content.
@@ -203,11 +212,22 @@ is not part of automated tests.
 - `GET /api/trips`
 - `GET /api/trips/{trip_id}`
 - `POST /api/trips/{trip_id}/photos`
+- `POST /api/trips/{trip_id}/photos/import`
 - `GET /api/trips/{trip_id}/photos`
+- `PATCH /api/photos/{photo_id}`
+- `DELETE /api/photos/{photo_id}`
 - `POST /api/photos/{photo_id}/analyze`
 - `POST /api/trips/{trip_id}/analyze`
+- `DELETE /api/trips/{trip_id}/analysis`
 - `GET /api/jobs/{job_id}`
+- `POST /api/jobs/{job_id}/cancel`
+- `POST /api/jobs/{job_id}/retry`
 - `POST /api/trips/{trip_id}/ask`
+- `GET /api/trips/{trip_id}/questions`
+- `PATCH /api/trips/{trip_id}`
+- `DELETE /api/trips/{trip_id}`
+- `GET /api/trips/{trip_id}/export.md`
+- `GET /api/trips/{trip_id}/export.zip`
 
 ## License
 
