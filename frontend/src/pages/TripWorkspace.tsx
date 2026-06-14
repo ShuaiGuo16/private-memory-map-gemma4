@@ -4,9 +4,13 @@ import {
   analyzeTrip,
   askTrip,
   createTrip,
+  exportTripMarkdown,
   getJob,
   getTrip,
   listTrips,
+  updatePhoto,
+  updateTrip,
+  updateTripMemory,
   uploadPhotos,
   type AnalysisJob,
   type AskResponse,
@@ -50,7 +54,12 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     () => photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0] ?? null,
     [photos, selectedPhotoId]
   );
-  const coverPhoto = selectedPhoto ?? photos.find((photo) => photo.analysis) ?? photos[0] ?? null;
+  const coverPhoto =
+    photos.find((photo) => photo.id === selectedTrip?.cover_photo_id) ??
+    selectedPhoto ??
+    photos.find((photo) => photo.analysis) ??
+    photos[0] ??
+    null;
 
   useEffect(() => {
     void refreshTrips();
@@ -133,6 +142,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               id: payload.id,
               title: payload.title,
               description: payload.description,
+              cover_photo_id: payload.cover_photo_id,
               created_at: payload.created_at
             }
           : trip
@@ -197,6 +207,61 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     await runAction(async () => {
       const response = await askTrip(selectedTripId, question);
       setAskResponse(response);
+    });
+  }
+
+  async function handleUpdatePhoto(
+    photoId: number,
+    payload: {
+      is_favorite?: boolean;
+      user_memory_caption?: string | null;
+      user_scene_summary?: string | null;
+      user_mood?: string | null;
+      user_note?: string | null;
+    }
+  ) {
+    await runAction(async () => {
+      await updatePhoto(photoId, payload);
+      if (selectedTripId !== null) {
+        await loadTripDetail(selectedTripId);
+      }
+    });
+  }
+
+  async function handleUpdateTripMemory(
+    payload: {
+      user_narrative_summary?: string | null;
+      user_note?: string | null;
+    }
+  ) {
+    if (selectedTripId === null) {
+      return;
+    }
+    await runAction(async () => {
+      const memory = await updateTripMemory(selectedTripId, payload);
+      setSelectedTripDetail((current) =>
+        current ? { ...current, memory } : current
+      );
+    });
+  }
+
+  async function handleSetCover(photoId: number) {
+    if (selectedTripId === null) {
+      return;
+    }
+    await runAction(async () => {
+      await updateTrip(selectedTripId, { cover_photo_id: photoId });
+      await loadTripDetail(selectedTripId);
+    });
+  }
+
+  async function handleExport() {
+    if (selectedTripId === null) {
+      return;
+    }
+    await runAction(async () => {
+      const exported = await exportTripMarkdown(selectedTripId);
+      downloadMarkdown(exported.filename, exported.content);
     });
   }
 
@@ -304,6 +369,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         <TripCover
           trip={selectedTrip}
           coverPhoto={coverPhoto}
+          selectedPhoto={selectedPhoto}
           photoCount={photos.length}
           locatedCount={locatedCount}
           analyzedCount={analyzedCount}
@@ -312,6 +378,8 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           }
           job={activeJob}
           onAnalyze={handleAnalyze}
+          onSetCover={handleSetCover}
+          onExport={handleExport}
         />
 
         <ViewSwitcher
@@ -328,8 +396,13 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               selectedPhoto={selectedPhoto}
               selectedPhotoId={selectedPhoto?.id ?? null}
               spotlightPhotoId={spotlightPhotoId}
+              coverPhotoId={selectedTrip?.cover_photo_id ?? null}
+              busy={busy}
               onSelectPhoto={handleSelectPhoto}
               onSelectEvidence={handleSelectEvidence}
+              onUpdatePhoto={handleUpdatePhoto}
+              onUpdateTripMemory={handleUpdateTripMemory}
+              onSetCover={handleSetCover}
             />
           ) : null}
 
@@ -369,6 +442,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               selectedPhotoId={selectedPhoto?.id ?? null}
               spotlightPhotoId={spotlightPhotoId}
               onSelectPhoto={handleSelectPhoto}
+              onUpdatePhoto={handleUpdatePhoto}
             />
           ) : null}
         </div>
@@ -381,8 +455,10 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         job={activeJob}
         tripMemory={selectedTripDetail?.memory ?? null}
         askResponse={askResponse}
+        exportDisabled={selectedTripId === null || busy}
         onAsk={handleAsk}
         onSelectEvidence={handleSelectEvidence}
+        onExport={handleExport}
       />
 
       {message ? <div className="toast">{message}</div> : null}
@@ -392,4 +468,17 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
 function isActiveJob(job: AnalysisJob): boolean {
   return job.status === "queued" || job.status === "running";
+}
+
+function downloadMarkdown(filename: string, content: string) {
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/markdown;charset=utf-8" })
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import {
   BrainCircuit,
   CircleAlert,
+  Download,
   LockKeyhole,
   MessageCircle,
   Send,
@@ -22,8 +23,10 @@ type MemoryCompanionProps = {
   job: AnalysisJob | null;
   tripMemory: TripMemory | null;
   askResponse: AskResponse | null;
+  exportDisabled: boolean;
   onAsk: (question: string) => void;
   onSelectEvidence: (photoId: number) => void;
+  onExport: () => void;
 };
 
 export function MemoryCompanion({
@@ -33,8 +36,10 @@ export function MemoryCompanion({
   job,
   tripMemory,
   askResponse,
+  exportDisabled,
   onAsk,
-  onSelectEvidence
+  onSelectEvidence,
+  onExport
 }: MemoryCompanionProps) {
   const [question, setQuestion] = useState("What did I seem drawn to on this trip?");
   const prompts = [
@@ -73,7 +78,8 @@ export function MemoryCompanion({
         {tripMemory ? (
           <>
             <span className="soft-kicker">Reflection</span>
-            <p>{tripMemory.narrative_summary}</p>
+            <p>{tripMemory.user_narrative_summary || tripMemory.narrative_summary}</p>
+            {tripMemory.user_note ? <em>{tripMemory.user_note}</em> : null}
             <EvidenceButtons
               ids={tripMemory.evidence_photo_ids}
               onSelectEvidence={onSelectEvidence}
@@ -86,6 +92,16 @@ export function MemoryCompanion({
           </div>
         )}
       </div>
+
+      <button
+        className="export-memory-button"
+        type="button"
+        disabled={exportDisabled}
+        onClick={onExport}
+      >
+        <Download size={16} aria-hidden="true" />
+        <span>Export memory</span>
+      </button>
 
       <div className="prompt-row" aria-label="Suggested questions">
         {prompts.map((prompt) => (
@@ -134,6 +150,28 @@ export function MemoryCompanion({
             </p>
           </div>
         )}
+      </div>
+
+      <div className="local-facts">
+        <span className="soft-kicker">Local facts</span>
+        <dl>
+          <div>
+            <dt>Model</dt>
+            <dd>{health?.gemma_model ?? "Offline"}</dd>
+          </div>
+          <div>
+            <dt>Coordinates</dt>
+            <dd>EXIF only</dd>
+          </div>
+          <div>
+            <dt>Images</dt>
+            <dd>JPEG, PNG, WebP</dd>
+          </div>
+          <div>
+            <dt>Memory</dt>
+            <dd>Local SQLite</dd>
+          </div>
+        </dl>
       </div>
     </aside>
   );

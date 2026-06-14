@@ -13,6 +13,7 @@ export type Trip = {
   id: number;
   title: string;
   description: string | null;
+  cover_photo_id: number | null;
   created_at: string;
 };
 
@@ -31,6 +32,8 @@ export type TripMemory = {
   evidence_photo_ids: number[];
   uncertainty_notes: string[];
   raw_model_json: Record<string, unknown>;
+  user_narrative_summary: string | null;
+  user_note: string | null;
   prompt_version: string;
   created_at: string;
   updated_at: string;
@@ -45,6 +48,11 @@ export type PhotoAnalysis = {
   memory_prompt: string;
   confidence: number;
   raw_model_json: Record<string, unknown>;
+  user_memory_caption: string | null;
+  user_scene_summary: string | null;
+  user_mood: string | null;
+  user_note: string | null;
+  updated_at: string | null;
   scene_summary: string;
   memory_caption: string;
   place_type: string;
@@ -65,6 +73,7 @@ export type Photo = {
   latitude: number | null;
   longitude: number | null;
   exif_json: Record<string, unknown>;
+  is_favorite: boolean;
   created_at: string;
   analysis: PhotoAnalysis | null;
 };
@@ -114,6 +123,21 @@ export async function createTrip(payload: {
   });
 }
 
+export async function updateTrip(
+  tripId: number,
+  payload: {
+    title?: string;
+    description?: string | null;
+    cover_photo_id?: number | null;
+  }
+): Promise<Trip> {
+  return request<Trip>(`/api/trips/${tripId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function uploadPhotos(
   tripId: number,
   files: FileList | File[]
@@ -145,11 +169,61 @@ export async function askTrip(
   });
 }
 
+export async function updatePhoto(
+  photoId: number,
+  payload: {
+    is_favorite?: boolean;
+    user_memory_caption?: string | null;
+    user_scene_summary?: string | null;
+    user_mood?: string | null;
+    user_note?: string | null;
+  }
+): Promise<Photo> {
+  return request<Photo>(`/api/photos/${photoId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateTripMemory(
+  tripId: number,
+  payload: {
+    user_narrative_summary?: string | null;
+    user_note?: string | null;
+  }
+): Promise<TripMemory> {
+  return request<TripMemory>(`/api/trips/${tripId}/memory`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function exportTripMarkdown(
+  tripId: number
+): Promise<{ filename: string; content: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/trips/${tripId}/export.md`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || response.statusText);
+  }
+  return {
+    filename: attachmentFilename(response.headers.get("content-disposition")),
+    content: await response.text()
+  };
+}
+
 export function assetUrl(path: string): string {
   if (path.startsWith("http")) {
     return path;
   }
   return `${API_BASE_URL}${path}`;
+}
+
+function attachmentFilename(value: string | null): string {
+  const match = value?.match(/filename="([^"]+)"/);
+  return match?.[1] ?? "trip-memory.md";
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

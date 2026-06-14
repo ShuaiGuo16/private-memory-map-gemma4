@@ -72,7 +72,7 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
           <Upload size={24} aria-hidden="true" />
         </span>
         <strong>Drop travel photos here</strong>
-        <span>JPEG, PNG, HEIC exports, and EXIF metadata stay local.</span>
+        <span>JPEG, PNG, and WebP only. EXIF metadata stays local.</span>
         <em>
           <LockKeyhole size={13} aria-hidden="true" />
           No cloud upload path
@@ -80,7 +80,7 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           disabled={disabled}
           onChange={handleChange}

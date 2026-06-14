@@ -1,4 +1,4 @@
-import { ImagePlus, MapPin, Sparkles } from "lucide-react";
+import { Download, ImagePlus, MapPin, Pin, Sparkles } from "lucide-react";
 import {
   assetUrl,
   type AnalysisJob,
@@ -10,23 +10,29 @@ import { jobPercent, jobStage } from "./jobStatus";
 type TripCoverProps = {
   trip: Trip | null;
   coverPhoto: Photo | null;
+  selectedPhoto: Photo | null;
   photoCount: number;
   locatedCount: number;
   analyzedCount: number;
   analyzeDisabled: boolean;
   job: AnalysisJob | null;
   onAnalyze: () => void;
+  onSetCover: (photoId: number) => void;
+  onExport: () => void;
 };
 
 export function TripCover({
   trip,
   coverPhoto,
+  selectedPhoto,
   photoCount,
   locatedCount,
   analyzedCount,
   analyzeDisabled,
   job,
-  onAnalyze
+  onAnalyze,
+  onSetCover,
+  onExport
 }: TripCoverProps) {
   const title = trip?.title ?? "Start a private trip";
   const description =
@@ -85,6 +91,26 @@ export function TripCover({
           >
             <Sparkles size={17} aria-hidden="true" />
             <span>{buttonLabel}</span>
+          </button>
+          <button
+            className="cover-secondary"
+            type="button"
+            disabled={!selectedPhoto || selectedPhoto.id === trip?.cover_photo_id}
+            onClick={() => selectedPhoto && onSetCover(selectedPhoto.id)}
+            title="Use selected photo as cover"
+          >
+            <Pin size={15} aria-hidden="true" />
+            <span>Set cover</span>
+          </button>
+          <button
+            className="cover-secondary"
+            type="button"
+            disabled={!trip}
+            onClick={onExport}
+            title="Export trip story"
+          >
+            <Download size={15} aria-hidden="true" />
+            <span>Export</span>
           </button>
           <span className="cover-privacy">
             <MapPin size={14} aria-hidden="true" />

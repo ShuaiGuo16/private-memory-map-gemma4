@@ -1,4 +1,4 @@
-import { Clock3, Images, MapPin, Sparkles } from "lucide-react";
+import { Clock3, Images, MapPin, Sparkles, Star } from "lucide-react";
 import { assetUrl, type Photo } from "../../api/client";
 
 type PhotoMosaicProps = {
@@ -6,13 +6,18 @@ type PhotoMosaicProps = {
   selectedPhotoId: number | null;
   spotlightPhotoId: number | null;
   onSelectPhoto: (photoId: number) => void;
+  onUpdatePhoto: (
+    photoId: number,
+    payload: { is_favorite?: boolean }
+  ) => void | Promise<void>;
 };
 
 export function PhotoMosaic({
   photos,
   selectedPhotoId,
   spotlightPhotoId,
-  onSelectPhoto
+  onSelectPhoto,
+  onUpdatePhoto
 }: PhotoMosaicProps) {
   if (photos.length === 0) {
     return (
@@ -36,27 +41,39 @@ export function PhotoMosaic({
       </div>
       <div className="photo-mosaic-grid">
         {photos.map((photo, index) => (
-          <button
+          <article
             key={photo.id}
-            type="button"
             className={`${photo.id === selectedPhotoId ? "selected" : ""} ${photo.id === spotlightPhotoId ? "spotlight" : ""} ${index % 5 === 0 ? "large" : ""}`}
-            onClick={() => onSelectPhoto(photo.id)}
           >
-            <img src={assetUrl(photo.image_url)} alt={photo.analysis?.memory_caption || photo.filename} />
-            <span>
-              <strong>{photo.analysis?.memory_caption || photo.filename}</strong>
-              <em>
-                {photo.analysis ? (
-                  <>
-                    <Sparkles size={12} aria-hidden="true" />
-                    Remembered
-                  </>
-                ) : (
-                  "Waiting for memory"
-                )}
-              </em>
-            </span>
-          </button>
+            <button
+              type="button"
+              className="mosaic-photo-button"
+              onClick={() => onSelectPhoto(photo.id)}
+            >
+              <img src={assetUrl(photo.image_url)} alt={photo.analysis?.memory_caption || photo.filename} />
+              <span>
+                <strong>{photo.analysis?.memory_caption || photo.filename}</strong>
+                <em>
+                  {photo.analysis ? (
+                    <>
+                      <Sparkles size={12} aria-hidden="true" />
+                      Remembered
+                    </>
+                  ) : (
+                    "Waiting for memory"
+                  )}
+                </em>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`mosaic-favorite ${photo.is_favorite ? "active" : ""}`}
+              onClick={() => onUpdatePhoto(photo.id, { is_favorite: !photo.is_favorite })}
+              title={photo.is_favorite ? "Remove from kept moments" : "Keep this moment"}
+            >
+              <Star size={15} aria-hidden="true" />
+            </button>
+          </article>
         ))}
       </div>
 
