@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlmodel import Session, select
 
+from backend.app.api.deps import get_trip_or_404
+from backend.app.api.errors import workflow_bad_request
 from backend.app.core.config import get_settings
 from backend.app.db.models import AnalysisJob, Photo, Trip, utc_now
 from backend.app.db.session import get_engine, get_session
@@ -34,7 +36,7 @@ def analyze_photo(
     try:
         record = analyze_photo_memory(session, photo_id, client=get_gemma_client())
     except WorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise workflow_bad_request(exc) from exc
     return PhotoAnalysisRead.model_validate(record)
 
 
@@ -44,14 +46,11 @@ def analyze_photo(
     status_code=status.HTTP_202_ACCEPTED,
 )
 def analyze_trip(
-    trip_id: int,
     background_tasks: BackgroundTasks,
+    trip: Trip = Depends(get_trip_or_404),
     session: Session = Depends(get_session),
 ) -> AnalysisJobRead:
-    trip = session.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
+    trip_id = int(trip.id)
     photos = session.exec(select(Photo).where(Photo.trip_id == trip_id)).all()
     total_steps = len(photos) + (1 if photos else 0)
     job = AnalysisJob(
@@ -86,18 +85,18 @@ def run_analysis_job(
                 completed_steps: int,
                 total_steps: int,
             ) -> None:
-                _update_job(
+                _save_job(
                     session,
-                    job_id,
+                    job,
                     status_value="running",
                     current_step=current_step,
                     completed_steps=completed_steps,
                     total_steps=total_steps,
                 )
 
-            _update_job(
+            _save_job(
                 session,
-                job_id,
+                job,
                 status_value="running",
                 current_step="Starting analysis",
             )
@@ -107,31 +106,29 @@ def run_analysis_job(
                 client=client,
                 on_progress=update_progress,
             )
-            final_job = session.get(AnalysisJob, job_id)
-            final_total = final_job.total_steps if final_job is not None else 0
-            _update_job(
+            _save_job(
                 session,
-                job_id,
+                job,
                 status_value="completed",
                 current_step="Completed",
-                completed_steps=final_total,
-                total_steps=final_total,
+                completed_steps=job.total_steps,
+                total_steps=job.total_steps,
                 error=None,
             )
         except Exception as exc:
             session.rollback()
-            _update_job(
+            _save_job(
                 session,
-                job_id,
+                job,
                 status_value="failed",
                 current_step="Failed",
                 error=str(exc),
             )
 
 
-def _update_job(
+def _save_job(
     session: Session,
-    job_id: int,
+    job: AnalysisJob,
     *,
     status_value: str,
     current_step: str | None = None,
@@ -139,10 +136,6 @@ def _update_job(
     total_steps: int | None = None,
     error: str | None = None,
 ) -> None:
-    job = session.get(AnalysisJob, job_id)
-    if job is None:
-        return
-
     job.status = status_value
     if current_step is not None:
         job.current_step = current_step

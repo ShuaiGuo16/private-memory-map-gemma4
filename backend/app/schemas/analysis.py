@@ -27,12 +27,6 @@ class PhotoAnalysisRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TripAnalysisResponse(BaseModel):
-    trip_id: int
-    analyzed_photo_count: int
-    analyses: list[PhotoAnalysisRead]
-
-
 class MemorableMomentRead(BaseModel):
     title: str
     description: str

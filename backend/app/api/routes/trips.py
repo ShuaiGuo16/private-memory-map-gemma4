@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session, select
 
-from backend.app.api.routes.photos import photo_to_read
+from backend.app.api.deps import get_trip_or_404
+from backend.app.api.serializers import photo_to_read
 from backend.app.db.models import Photo, Trip, TripMemory
 from backend.app.db.session import get_session
 from backend.app.schemas.analysis import TripMemoryRead
@@ -28,11 +29,11 @@ def list_trips(session: Session = Depends(get_session)) -> list[TripRead]:
 
 
 @router.get("/{trip_id}", response_model=TripDetail)
-def get_trip(trip_id: int, session: Session = Depends(get_session)) -> TripDetail:
-    trip = session.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
+def get_trip(
+    trip: Trip = Depends(get_trip_or_404),
+    session: Session = Depends(get_session),
+) -> TripDetail:
+    trip_id = int(trip.id)
     photos = session.exec(
         select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
     ).all()

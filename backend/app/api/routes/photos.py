@@ -3,10 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
+from backend.app.api.deps import get_trip_or_404
+from backend.app.api.serializers import photo_to_read
 from backend.app.core.config import get_settings
 from backend.app.db.models import Photo, Trip
 from backend.app.db.session import get_session
-from backend.app.schemas.analysis import PhotoAnalysisRead
 from backend.app.schemas.photo import PhotoRead
 from backend.app.services.exif import extract_exif
 from backend.app.services.storage import (
@@ -20,16 +21,13 @@ router = APIRouter(tags=["photos"])
 
 @router.post("/trips/{trip_id}/photos", response_model=list[PhotoRead])
 async def upload_trip_photos(
-    trip_id: int,
     files: list[UploadFile] = File(...),
+    trip: Trip = Depends(get_trip_or_404),
     session: Session = Depends(get_session),
 ) -> list[PhotoRead]:
-    trip = session.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
     created: list[Photo] = []
     settings = get_settings()
+    trip_id = int(trip.id)
     for upload in files:
         try:
             stored = await save_image_upload(upload, trip_id=trip_id, settings=settings)
@@ -59,35 +57,11 @@ async def upload_trip_photos(
 
 @router.get("/trips/{trip_id}/photos", response_model=list[PhotoRead])
 def list_trip_photos(
-    trip_id: int,
+    trip: Trip = Depends(get_trip_or_404),
     session: Session = Depends(get_session),
 ) -> list[PhotoRead]:
-    trip = session.get(Trip, trip_id)
-    if trip is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
-
+    trip_id = int(trip.id)
     photos = session.exec(
         select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
     ).all()
     return [photo_to_read(photo) for photo in photos]
-
-
-def photo_to_read(photo: Photo) -> PhotoRead:
-    analysis = (
-        PhotoAnalysisRead.model_validate(photo.analysis)
-        if photo.analysis is not None
-        else None
-    )
-    return PhotoRead(
-        id=int(photo.id),
-        trip_id=photo.trip_id,
-        filename=photo.filename,
-        stored_path=photo.stored_path,
-        image_url=f"/uploads/{photo.stored_path}",
-        captured_at=photo.captured_at,
-        latitude=photo.latitude,
-        longitude=photo.longitude,
-        exif_json=photo.exif_json,
-        created_at=photo.created_at,
-        analysis=analysis,
-    )
