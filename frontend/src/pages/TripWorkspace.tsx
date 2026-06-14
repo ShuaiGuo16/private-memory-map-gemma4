@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { CheckCircle2, ImagePlus, MessageCircle, Plus, RefreshCw, Route, Sparkles } from "lucide-react";
 import {
   analyzeTrip,
   askTrip,
@@ -82,6 +82,41 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const analysisRunning = activeJob ? isActiveJob(activeJob) : false;
   const hasAnalyzedPhotos = photos.some((photo) => photo.analysis !== null);
   const canAsk = Boolean(selectedTripDetail?.memory && hasAnalyzedPhotos);
+  const analyzedCount = photos.filter((photo) => photo.analysis !== null).length;
+  const locatedCount = photos.filter(
+    (photo) => photo.latitude !== null && photo.longitude !== null
+  ).length;
+  const journeySteps = [
+    {
+      label: "Trip",
+      detail: selectedTrip ? selectedTrip.title : "Create or select one",
+      icon: Route,
+      state: selectedTripId === null ? "active" : "complete"
+    },
+    {
+      label: "Photos",
+      detail: photos.length > 0 ? `${photos.length} imported` : "Add travel images",
+      icon: ImagePlus,
+      state:
+        photos.length === 0 ? (selectedTripId === null ? "pending" : "active") : "complete"
+    },
+    {
+      label: "Gemma",
+      detail: analysisRunning
+        ? activeJob?.current_step ?? "Analyzing"
+        : analyzedCount > 0
+          ? `${analyzedCount} remembered`
+          : "Run memory workflow",
+      icon: Sparkles,
+      state: analysisRunning ? "active" : analyzedCount > 0 ? "complete" : "pending"
+    },
+    {
+      label: "Ask",
+      detail: canAsk ? "Grounded Q&A ready" : "Needs trip memory",
+      icon: MessageCircle,
+      state: canAsk ? "complete" : "pending"
+    }
+  ];
 
   async function refreshTrips() {
     try {
@@ -206,11 +241,20 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
   return (
     <section className="workspace">
-      <aside className="side-panel">
+      <aside className="trip-rail">
+        <div className="rail-intro">
+          <span>Local-first workspace</span>
+          <h2>Shape a trip into a memory map.</h2>
+          <p>Import photos, let Gemma reason over the visual evidence, then ask questions grounded in your own trip.</p>
+        </div>
+
         <form className="trip-form" onSubmit={handleCreateTrip}>
-          <div className="panel-heading">
-            <h2>Trips</h2>
-            <button type="submit" disabled={busy || !title.trim()} title="Create trip">
+          <div className="panel-heading compact">
+            <div>
+              <span className="eyebrow">Step 1</span>
+              <h2>Trips</h2>
+            </div>
+            <button className="primary-action" type="submit" disabled={busy || !title.trim()} title="Create trip">
               <Plus size={16} aria-hidden="true" />
               <span>Create</span>
             </button>
@@ -228,22 +272,32 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           />
         </form>
 
-        <div className="trip-list">
-          {trips.map((trip) => (
-            <button
-              key={trip.id}
-              className={trip.id === selectedTripId ? "selected" : ""}
-              onClick={() => {
-                setSelectedTripId(trip.id);
-                setAskResponse(null);
-                setActiveJob(null);
-              }}
-              type="button"
-            >
-              <strong>{trip.title}</strong>
-              <span>{trip.description || "Local photo memory"}</span>
-            </button>
-          ))}
+        <div className="trip-list-section">
+          <div className="section-label">Recent trips</div>
+          <div className="trip-list">
+            {trips.length === 0 ? (
+              <p className="empty-copy">Create a trip to begin.</p>
+            ) : (
+              trips.map((trip) => (
+                <button
+                  key={trip.id}
+                  className={trip.id === selectedTripId ? "selected" : ""}
+                  onClick={() => {
+                    setSelectedTripId(trip.id);
+                    setAskResponse(null);
+                    setActiveJob(null);
+                  }}
+                  type="button"
+                >
+                  <span className="trip-select-dot" aria-hidden="true" />
+                  <span>
+                    <strong>{trip.title}</strong>
+                    <em>{trip.description || "Local photo memory"}</em>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
 
         <UploadPanel
@@ -252,14 +306,38 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         />
       </aside>
 
-      <div className="main-grid">
+      <div className="workspace-main">
+        <section className="journey-strip" aria-label="Trip memory workflow progress">
+          {journeySteps.map((step) => {
+            const Icon = step.icon;
+            return (
+              <div key={step.label} className={`journey-step ${step.state}`}>
+                <span className="journey-icon">
+                  {step.state === "complete" ? (
+                    <CheckCircle2 size={18} aria-hidden="true" />
+                  ) : (
+                    <Icon size={18} aria-hidden="true" />
+                  )}
+                </span>
+                <span>
+                  <strong>{step.label}</strong>
+                  <em>{step.detail}</em>
+                </span>
+              </div>
+            );
+          })}
+        </section>
+
+        <div className="main-grid">
         <section className="map-panel">
           <div className="panel-heading">
             <div>
+              <span className="eyebrow">Memory atlas</span>
               <h2>{selectedTrip?.title ?? "Memory Map"}</h2>
-              <p>{photos.length} photo{photos.length === 1 ? "" : "s"}</p>
+              <p>{selectedTrip?.description || "Map EXIF locations without inventing coordinates."}</p>
             </div>
             <button
+              className="icon-button"
               type="button"
               onClick={() => selectedTripId && refreshTripDetail(selectedTripId)}
               disabled={selectedTripId === null || busy}
@@ -267,6 +345,20 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
             >
               <RefreshCw size={16} aria-hidden="true" />
             </button>
+          </div>
+          <div className="map-stats">
+            <span>
+              <strong>{photos.length}</strong>
+              Photos
+            </span>
+            <span>
+              <strong>{locatedCount}</strong>
+              On map
+            </span>
+            <span>
+              <strong>{analyzedCount}</strong>
+              Remembered
+            </span>
           </div>
           <MemoryMap
             photos={photos}
@@ -286,7 +378,6 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         <InsightsPanel
           health={health}
           healthError={healthError}
-          disabled={selectedTripId === null || busy || analysisRunning}
           askDisabled={!canAsk || busy || analysisRunning}
           analyzeDisabled={
             selectedTripId === null || busy || analysisRunning || photos.length === 0
@@ -298,6 +389,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           onAsk={handleAsk}
           onSelectEvidence={setSelectedPhotoId}
         />
+        </div>
       </div>
 
       {message ? <div className="toast">{message}</div> : null}

@@ -16,6 +16,7 @@ export function MemoryMap({
   const locatedPhotos = photos.filter(
     (photo) => photo.latitude !== null && photo.longitude !== null
   );
+  const unlocatedCount = photos.length - locatedPhotos.length;
   const center: LatLngExpression =
     locatedPhotos.length > 0
       ? [locatedPhotos[0].latitude!, locatedPhotos[0].longitude!]
@@ -38,17 +39,28 @@ export function MemoryMap({
           <Marker
             key={photo.id}
             position={[photo.latitude!, photo.longitude!]}
+            zIndexOffset={selectedPhotoId === photo.id ? 900 : 0}
             eventHandlers={{ click: () => onSelectPhoto(photo.id) }}
           >
-            <Popup>
-              <strong>{photo.filename}</strong>
-              {selectedPhotoId === photo.id ? <p>Selected memory</p> : null}
+            <Popup className="memory-popup">
+              <strong>{photo.analysis?.memory_caption || photo.filename}</strong>
+              <p>{photo.analysis?.place_type || "GPS from EXIF metadata"}</p>
+              <button type="button" onClick={() => onSelectPhoto(photo.id)}>
+                Inspect photo
+              </button>
             </Popup>
           </Marker>
         ))}
       </MapContainer>
       {locatedPhotos.length === 0 ? (
-        <div className="map-empty">No GPS photos yet</div>
+        <div className="map-empty">
+          <span aria-hidden="true" />
+          <strong>No GPS trail yet</strong>
+          <p>Photos without EXIF coordinates still become memories, but precise map pins only come from metadata.</p>
+        </div>
+      ) : null}
+      {locatedPhotos.length > 0 && unlocatedCount > 0 ? (
+        <div className="map-note">{unlocatedCount} photo{unlocatedCount === 1 ? "" : "s"} without GPS</div>
       ) : null}
     </div>
   );

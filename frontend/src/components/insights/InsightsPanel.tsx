@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { BrainCircuit, CircleAlert, MessageSquareText, Send, Sparkles } from "lucide-react";
 import type {
   AnalysisJob,
   AskResponse,
@@ -10,7 +10,6 @@ import type {
 type InsightsPanelProps = {
   health: HealthResponse | null;
   healthError: string | null;
-  disabled: boolean;
   askDisabled: boolean;
   analyzeDisabled: boolean;
   job: AnalysisJob | null;
@@ -24,7 +23,6 @@ type InsightsPanelProps = {
 export function InsightsPanel({
   health,
   healthError,
-  disabled,
   askDisabled,
   analyzeDisabled,
   job,
@@ -35,6 +33,12 @@ export function InsightsPanel({
   onSelectEvidence
 }: InsightsPanelProps) {
   const [question, setQuestion] = useState("What did I seem drawn to on this trip?");
+  const jobRunning = job?.status === "queued" || job?.status === "running";
+  const suggestedQuestions = [
+    "What did I seem drawn to on this trip?",
+    "Which moments were most memorable?",
+    "What should I revisit next time?"
+  ];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,10 +51,12 @@ export function InsightsPanel({
     <section className="insights-panel">
       <div className="panel-heading">
         <div>
-          <h2>Memory Search</h2>
-          <p>{health ? `${health.database} + ${health.storage}` : healthError ?? "Offline"}</p>
+          <span className="eyebrow">Steps 3 and 4</span>
+          <h2>Gemma memory engine</h2>
+          <p>{health ? `${health.database} memory store ready` : healthError ?? "Offline"}</p>
         </div>
         <button
+          className="magic-action"
           type="button"
           onClick={onAnalyze}
           disabled={analyzeDisabled}
@@ -64,10 +70,26 @@ export function InsightsPanel({
       {job ? <JobProgress job={job} /> : null}
       <TripMemoryBlock memory={tripMemory} onSelectEvidence={onSelectEvidence} />
 
+      <div className="question-prompts" aria-label="Suggested questions">
+        {suggestedQuestions.map((item) => (
+          <button
+            key={item}
+            type="button"
+            disabled={askDisabled}
+            onClick={() => setQuestion(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
       <form className="ask-form" onSubmit={handleSubmit}>
+        <MessageSquareText size={17} aria-hidden="true" />
         <input
+          aria-label="Ask a grounded trip question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Ask about this trip..."
           disabled={askDisabled}
         />
         <button type="submit" disabled={askDisabled || !question.trim()} title="Ask trip">
@@ -78,6 +100,7 @@ export function InsightsPanel({
       <div className="answer-box">
         {askResponse ? (
           <>
+            <span className="answer-label">Grounded answer</span>
             <p>{askResponse.answer}</p>
             <EvidenceButtons
               ids={askResponse.evidence_photo_ids}
@@ -85,7 +108,14 @@ export function InsightsPanel({
             />
           </>
         ) : (
-          <p>{disabled ? "Working..." : "Analyze this trip first."}</p>
+          <div className="answer-empty">
+            <BrainCircuit size={20} aria-hidden="true" />
+            <p>
+              {jobRunning
+                ? "Working..."
+                : "Analyze this trip first, then ask Gemma to reason over the memories."}
+            </p>
+          </div>
         )}
       </div>
     </section>
@@ -104,10 +134,17 @@ function JobProgress({ job }: { job: AnalysisJob }) {
     <div className={`job-progress ${job.status}`}>
       <div>
         <strong>{job.current_step}</strong>
-        <span>{job.status}</span>
+        <span>{percent}%</span>
       </div>
       <progress max={100} value={percent} />
-      {job.error ? <p>{job.error}</p> : null}
+      {job.error ? (
+        <p>
+          <CircleAlert size={14} aria-hidden="true" />
+          {job.error}
+        </p>
+      ) : (
+        <em>{job.status}</em>
+      )}
     </div>
   );
 }
@@ -122,15 +159,21 @@ function TripMemoryBlock({
   if (!memory) {
     return (
       <div className="trip-memory muted">
-        <p>Analyze this trip first.</p>
+        <Sparkles size={20} aria-hidden="true" />
+        <div>
+          <strong>No trip memory yet</strong>
+          <p>Run analysis after importing photos. Gemma will synthesize themes, moments, and evidence IDs.</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="trip-memory">
+      <span className="answer-label">Trip synthesis</span>
       <p>{memory.narrative_summary}</p>
       <ChipList values={memory.inferred_interests} />
+      <ThemeList values={memory.recurring_themes} />
       <div className="memory-moments">
         {memory.memorable_moments.slice(0, 3).map((moment) => (
           <article key={moment.title}>
@@ -143,6 +186,12 @@ function TripMemoryBlock({
           </article>
         ))}
       </div>
+      {memory.uncertainty_notes.length > 0 ? (
+        <p className="uncertainty compact">
+          <CircleAlert size={14} aria-hidden="true" />
+          {memory.uncertainty_notes.join(" ")}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -155,6 +204,20 @@ function ChipList({ values }: { values: string[] }) {
   return (
     <div className="chip-list">
       {values.slice(0, 8).map((value) => (
+        <span key={value}>{value}</span>
+      ))}
+    </div>
+  );
+}
+
+function ThemeList({ values }: { values: string[] }) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="theme-list">
+      {values.slice(0, 4).map((value) => (
         <span key={value}>{value}</span>
       ))}
     </div>

@@ -1,5 +1,5 @@
-import { CalendarDays } from "lucide-react";
-import type { Photo } from "../../api/client";
+import { CalendarDays, Clock3, Sparkles } from "lucide-react";
+import { assetUrl, type Photo } from "../../api/client";
 
 type TimelineProps = {
   photos: Photo[];
@@ -11,12 +11,18 @@ export function Timeline({ photos, selectedPhotoId, onSelectPhoto }: TimelinePro
   return (
     <section className="timeline-panel">
       <div className="panel-heading">
-        <h2>Timeline</h2>
+        <div>
+          <span className="eyebrow">Sequence</span>
+          <h2>Timeline</h2>
+        </div>
         <CalendarDays size={18} aria-hidden="true" />
       </div>
       <div className="timeline-list">
         {photos.length === 0 ? (
-          <p className="empty-copy">No photos uploaded</p>
+          <div className="empty-state compact">
+            <Clock3 size={20} aria-hidden="true" />
+            <p>No photos uploaded yet.</p>
+          </div>
         ) : (
           photos.map((photo) => (
             <button
@@ -25,8 +31,21 @@ export function Timeline({ photos, selectedPhotoId, onSelectPhoto }: TimelinePro
               onClick={() => onSelectPhoto(photo.id)}
               type="button"
             >
-              <span>{formatDate(photo.captured_at ?? photo.created_at)}</span>
-              <strong>{photo.analysis?.memory_caption || photo.filename}</strong>
+              <img src={assetUrl(photo.image_url)} alt="" />
+              <span>
+                <em>{formatDate(photo.captured_at ?? photo.created_at)}</em>
+                <strong>{photo.analysis?.memory_caption || photo.filename}</strong>
+                <small>
+                  {photo.analysis ? (
+                    <>
+                      <Sparkles size={12} aria-hidden="true" />
+                      Remembered
+                    </>
+                  ) : (
+                    "Waiting for Gemma"
+                  )}
+                </small>
+              </span>
             </button>
           ))
         )}

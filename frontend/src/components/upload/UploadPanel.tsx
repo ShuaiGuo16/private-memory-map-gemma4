@@ -1,13 +1,14 @@
-import { ChangeEvent, useRef } from "react";
-import { ImagePlus, Upload } from "lucide-react";
+import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import { ImagePlus, LockKeyhole, Upload } from "lucide-react";
 
 type UploadPanelProps = {
   disabled: boolean;
-  onUpload: (files: FileList) => void;
+  onUpload: (files: FileList | File[]) => void;
 };
 
 export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
@@ -17,11 +18,41 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
     }
   }
 
+  function handleDragOver(event: DragEvent<HTMLLabelElement>) {
+    if (disabled) {
+      return;
+    }
+    event.preventDefault();
+    setDragActive(true);
+  }
+
+  function handleDragLeave() {
+    setDragActive(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    if (disabled) {
+      return;
+    }
+    event.preventDefault();
+    setDragActive(false);
+    const files = Array.from(event.dataTransfer.files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+    if (files.length > 0) {
+      onUpload(files);
+    }
+  }
+
   return (
     <div className="upload-panel">
       <div className="panel-heading">
-        <h2>Photos</h2>
+        <div>
+          <span className="eyebrow">Step 2</span>
+          <h2>Photo import</h2>
+        </div>
         <button
+          className="secondary-action"
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
@@ -31,9 +62,21 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
           <span>Select</span>
         </button>
       </div>
-      <label className={`drop-zone ${disabled ? "disabled" : ""}`}>
-        <Upload size={24} aria-hidden="true" />
-        <span>Upload images</span>
+      <label
+        className={`drop-zone ${disabled ? "disabled" : ""} ${dragActive ? "drag-active" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <span className="drop-icon">
+          <Upload size={24} aria-hidden="true" />
+        </span>
+        <strong>Drop travel photos here</strong>
+        <span>JPEG, PNG, HEIC exports, and EXIF metadata stay local.</span>
+        <em>
+          <LockKeyhole size={13} aria-hidden="true" />
+          No cloud upload path
+        </em>
         <input
           ref={inputRef}
           type="file"

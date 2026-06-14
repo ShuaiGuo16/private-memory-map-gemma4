@@ -1,4 +1,4 @@
-import { Camera, MapPin } from "lucide-react";
+import { Aperture, Camera, Info, MapPin, Sparkles } from "lucide-react";
 import { assetUrl, type Photo } from "../../api/client";
 
 type PhotoDetailProps = {
@@ -9,17 +9,31 @@ export function PhotoDetail({ photo }: PhotoDetailProps) {
   if (!photo) {
     return (
       <section className="photo-panel empty">
-        <Camera size={28} aria-hidden="true" />
-        <p>No selected photo</p>
+        <span className="empty-illustration">
+          <Camera size={30} aria-hidden="true" />
+        </span>
+        <div>
+          <h2>No photo selected</h2>
+          <p>Select a timeline item or upload photos to begin.</p>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="photo-panel">
-      <img src={assetUrl(photo.image_url)} alt={photo.filename} />
+      <div className="photo-stage">
+        <img src={assetUrl(photo.image_url)} alt={photo.filename} />
+        <div className="photo-stage-overlay">
+          <span>
+            <Aperture size={14} aria-hidden="true" />
+            {photo.analysis?.place_type || "Unanalyzed photo"}
+          </span>
+        </div>
+      </div>
       <div className="photo-meta">
         <div>
+          <span className="eyebrow">Selected memory</span>
           <h2>{photo.filename}</h2>
           <p>{formatDate(photo.captured_at ?? photo.created_at)}</p>
         </div>
@@ -31,8 +45,11 @@ export function PhotoDetail({ photo }: PhotoDetailProps) {
         </span>
       </div>
       <div className="analysis-block">
-        <h3>{photo.analysis?.memory_caption || "Analysis pending"}</h3>
-        <p>{photo.analysis?.scene_summary || "No memory prompt yet."}</p>
+        <div className="analysis-title">
+          <Sparkles size={18} aria-hidden="true" />
+          <h3>{photo.analysis?.memory_caption || "Analysis pending"}</h3>
+        </div>
+        <p>{photo.analysis?.scene_summary || "Run the Gemma workflow to turn this image into a grounded memory."}</p>
         {photo.analysis ? (
           <>
             <div className="analysis-facts">
@@ -42,9 +59,13 @@ export function PhotoDetail({ photo }: PhotoDetailProps) {
             </div>
             <TagGroup title="Activities" values={photo.analysis.visible_activities} />
             <TagGroup title="Objects" values={photo.analysis.visible_objects} />
+            <TagGroup title="Sensory details" values={photo.analysis.sensory_details} />
             <TagGroup title="Interests" values={photo.analysis.inferred_interest_signals} />
             {photo.analysis.uncertainty_notes.length > 0 ? (
-              <p className="uncertainty">{photo.analysis.uncertainty_notes.join(" ")}</p>
+              <p className="uncertainty">
+                <Info size={14} aria-hidden="true" />
+                {photo.analysis.uncertainty_notes.join(" ")}
+              </p>
             ) : null}
           </>
         ) : null}
