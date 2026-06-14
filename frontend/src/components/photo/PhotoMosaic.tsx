@@ -1,10 +1,12 @@
-import { Clock3, Images, MapPin, Sparkles, Star } from "lucide-react";
+import { Clock3, Images, MapPin, Pin, Sparkles, Star } from "lucide-react";
 import { assetUrl, type Photo } from "../../api/client";
 
 type PhotoMosaicProps = {
   photos: Photo[];
   selectedPhotoId: number | null;
   spotlightPhotoId: number | null;
+  coverPhotoId: number | null;
+  isRefining: boolean;
   onSelectPhoto: (photoId: number) => void;
   onUpdatePhoto: (
     photoId: number,
@@ -16,6 +18,8 @@ export function PhotoMosaic({
   photos,
   selectedPhotoId,
   spotlightPhotoId,
+  coverPhotoId,
+  isRefining,
   onSelectPhoto,
   onUpdatePhoto
 }: PhotoMosaicProps) {
@@ -65,14 +69,21 @@ export function PhotoMosaic({
                 </em>
               </span>
             </button>
-            <button
-              type="button"
-              className={`mosaic-favorite ${photo.is_favorite ? "active" : ""}`}
-              onClick={() => onUpdatePhoto(photo.id, { is_favorite: !photo.is_favorite })}
-              title={photo.is_favorite ? "Remove from kept moments" : "Keep this moment"}
-            >
-              <Star size={15} aria-hidden="true" />
-            </button>
+            {isRefining ? (
+              <button
+                type="button"
+                className={`mosaic-favorite ${photo.is_favorite ? "active" : ""}`}
+                onClick={() => onUpdatePhoto(photo.id, { is_favorite: !photo.is_favorite })}
+                title={photo.is_favorite ? "Remove from kept moments" : "Keep this moment"}
+              >
+                <Star size={15} aria-hidden="true" />
+              </button>
+            ) : (
+              <MosaicBadges
+                isFavorite={photo.is_favorite}
+                isCover={coverPhotoId === photo.id}
+              />
+            )}
           </article>
         ))}
       </div>
@@ -109,6 +120,25 @@ export function PhotoMosaic({
         </div>
       </div>
     </section>
+  );
+}
+
+function MosaicBadges({
+  isFavorite,
+  isCover
+}: {
+  isFavorite: boolean;
+  isCover: boolean;
+}) {
+  if (!isFavorite && !isCover) {
+    return null;
+  }
+
+  return (
+    <div className="mosaic-badges" aria-label="Photo status">
+      {isFavorite ? <Star size={14} aria-hidden="true" /> : null}
+      {isCover ? <Pin size={14} aria-hidden="true" /> : null}
+    </div>
   );
 }
 

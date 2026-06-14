@@ -3,10 +3,11 @@ import { ImagePlus, LockKeyhole, Upload } from "lucide-react";
 
 type UploadPanelProps = {
   disabled: boolean;
+  compact: boolean;
   onUpload: (files: FileList | File[]) => void;
 };
 
-export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
+export function UploadPanel({ disabled, compact, onUpload }: UploadPanelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -45,11 +46,11 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
   }
 
   return (
-    <div className="upload-panel">
+    <div className={`upload-panel ${compact ? "compact" : ""}`}>
       <div className="panel-heading">
         <div>
           <span className="soft-kicker">Photo import</span>
-          <h2>Add travel photos</h2>
+          <h2>{compact ? "Add more" : "Add travel photos"}</h2>
         </div>
         <button
           className="secondary-action"
@@ -71,7 +72,7 @@ export function UploadPanel({ disabled, onUpload }: UploadPanelProps) {
         <span className="drop-icon">
           <Upload size={24} aria-hidden="true" />
         </span>
-        <strong>Drop travel photos here</strong>
+        <strong>{compact ? "Add more photos" : "Drop travel photos here"}</strong>
         <span>JPEG, PNG, and WebP only. EXIF metadata stays local.</span>
         <em>
           <LockKeyhole size={13} aria-hidden="true" />

@@ -31,6 +31,8 @@ type TripWorkspaceProps = {
   healthError: string | null;
 };
 
+type TripStage = "empty" | "needsPhotos" | "readyToDevelop" | "memoryReady";
+
 export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
@@ -44,6 +46,8 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [busy, setBusy] = useState(false);
   const [askResponse, setAskResponse] = useState<AskResponse | null>(null);
   const [activeJob, setActiveJob] = useState<AnalysisJob | null>(null);
+  const [isRefining, setIsRefining] = useState(false);
+  const [isCreatingTrip, setIsCreatingTrip] = useState(false);
 
   const selectedTrip = useMemo(
     () => selectedTripDetail ?? trips.find((trip) => trip.id === selectedTripId) ?? null,
@@ -64,6 +68,12 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   useEffect(() => {
     void refreshTrips();
   }, []);
+
+  useEffect(() => {
+    if (trips.length > 0) {
+      setIsCreatingTrip(false);
+    }
+  }, [trips.length]);
 
   useEffect(() => {
     if (selectedTripId === null) {
@@ -98,6 +108,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const locatedCount = photos.filter(
     (photo) => photo.latitude !== null && photo.longitude !== null
   ).length;
+  const tripStage = getTripStage(selectedTripId, photos.length, hasAnalyzedPhotos);
 
   async function runAction(
     action: () => Promise<void>,
@@ -171,6 +182,8 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       setSpotlightPhotoId(null);
       setAskResponse(null);
       setActiveJob(null);
+      setIsRefining(false);
+      setIsCreatingTrip(false);
       setActiveView("story");
       setTitle("");
       setDescription("");
@@ -292,6 +305,16 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     setActiveView("story");
   }
 
+  function handleSelectTrip(tripId: number) {
+    setSelectedTripId(tripId);
+    setAskResponse(null);
+    setActiveJob(null);
+    setIsRefining(false);
+    setActiveView("story");
+  }
+
+  const createTripOpen = trips.length === 0 || isCreatingTrip;
+
   return (
     <section className="workspace story-workspace">
       <aside className="trip-rail story-rail">
@@ -301,7 +324,16 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           <p>Choose a trip, import photos, and let the memory unfold locally.</p>
         </div>
 
-        <form className="trip-form" onSubmit={handleCreateTrip}>
+        <details
+          className="trip-create-panel"
+          open={createTripOpen}
+          onToggle={(event) => setIsCreatingTrip(event.currentTarget.open)}
+        >
+          <summary>
+            <Plus size={15} aria-hidden="true" />
+            <span>New trip</span>
+          </summary>
+          <form className="trip-form" onSubmit={handleCreateTrip}>
           <div className="panel-heading compact">
             <div>
               <span className="soft-kicker">New trip</span>
@@ -328,7 +360,8 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
             placeholder="A short note about this trip"
             rows={3}
           />
-        </form>
+          </form>
+        </details>
 
         <div className="trip-list-section">
           <div className="section-label">Trip library</div>
@@ -340,12 +373,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
                 <button
                   key={trip.id}
                   className={trip.id === selectedTripId ? "selected" : ""}
-                  onClick={() => {
-                    setSelectedTripId(trip.id);
-                    setAskResponse(null);
-                    setActiveJob(null);
-                    setActiveView("story");
-                  }}
+                  onClick={() => handleSelectTrip(trip.id)}
                   type="button"
                 >
                   <span className="trip-select-dot" aria-hidden="true" />
@@ -361,6 +389,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
         <UploadPanel
           disabled={selectedTripId === null || busy || analysisRunning}
+          compact={tripStage === "memoryReady"}
           onUpload={handleUpload}
         />
       </aside>
@@ -398,11 +427,13 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               spotlightPhotoId={spotlightPhotoId}
               coverPhotoId={selectedTrip?.cover_photo_id ?? null}
               busy={busy}
+              isRefining={isRefining}
               onSelectPhoto={handleSelectPhoto}
               onSelectEvidence={handleSelectEvidence}
               onUpdatePhoto={handleUpdatePhoto}
               onUpdateTripMemory={handleUpdateTripMemory}
               onSetCover={handleSetCover}
+              onRefineChange={setIsRefining}
             />
           ) : null}
 
@@ -441,6 +472,8 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
               photos={photos}
               selectedPhotoId={selectedPhoto?.id ?? null}
               spotlightPhotoId={spotlightPhotoId}
+              coverPhotoId={selectedTrip?.cover_photo_id ?? null}
+              isRefining={isRefining}
               onSelectPhoto={handleSelectPhoto}
               onUpdatePhoto={handleUpdatePhoto}
             />
@@ -468,6 +501,20 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
 function isActiveJob(job: AnalysisJob): boolean {
   return job.status === "queued" || job.status === "running";
+}
+
+function getTripStage(
+  selectedTripId: number | null,
+  photoCount: number,
+  hasAnalyzedPhotos: boolean
+): TripStage {
+  if (selectedTripId === null) {
+    return "empty";
+  }
+  if (photoCount === 0) {
+    return "needsPhotos";
+  }
+  return hasAnalyzedPhotos ? "memoryReady" : "readyToDevelop";
 }
 
 function downloadMarkdown(filename: string, content: string) {

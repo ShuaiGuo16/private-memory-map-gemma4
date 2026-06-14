@@ -5,8 +5,10 @@ import {
   Pin,
   RotateCcw,
   Save,
+  SlidersHorizontal,
   Sparkles,
-  Star
+  Star,
+  X
 } from "lucide-react";
 import { assetUrl, type Photo, type TripMemory } from "../../api/client";
 
@@ -18,6 +20,7 @@ type MemoryStoryProps = {
   spotlightPhotoId: number | null;
   coverPhotoId: number | null;
   busy: boolean;
+  isRefining: boolean;
   onSelectPhoto: (photoId: number) => void;
   onSelectEvidence: (photoId: number) => void;
   onUpdatePhoto: (
@@ -35,6 +38,7 @@ type MemoryStoryProps = {
     user_note?: string | null;
   }) => void | Promise<void>;
   onSetCover: (photoId: number) => void | Promise<void>;
+  onRefineChange: (value: boolean) => void;
 };
 
 export function MemoryStory({
@@ -45,21 +49,35 @@ export function MemoryStory({
   spotlightPhotoId,
   coverPhotoId,
   busy,
+  isRefining,
   onSelectPhoto,
   onSelectEvidence,
   onUpdatePhoto,
   onUpdateTripMemory,
-  onSetCover
+  onSetCover,
+  onRefineChange
 }: MemoryStoryProps) {
   const analyzedPhotos = photos.filter((photo) => photo.analysis !== null);
   const favoritePhotos = photos.filter((photo) => photo.is_favorite);
+  const canRefine = Boolean(memory || analyzedPhotos.length > 0);
+  const showKeptMoments = favoritePhotos.length > 1;
+  const showPhotoMemories = analyzedPhotos.length > 1;
 
   return (
     <section className="story-view">
       {memory ? (
         <article className="story-narrative">
-          <span className="soft-kicker">Trip story</span>
-          <h2>{memory.user_narrative_summary || memory.narrative_summary}</h2>
+          <div className="story-heading-row">
+            <div>
+              <span className="soft-kicker">Trip story</span>
+              <h2>{memory.user_narrative_summary || memory.narrative_summary}</h2>
+            </div>
+            <RefineToggle
+              active={isRefining}
+              disabled={!canRefine || busy}
+              onChange={onRefineChange}
+            />
+          </div>
           {memory.user_note ? <p className="memory-user-note">{memory.user_note}</p> : null}
           <ChipList values={memory.inferred_interests} />
           <ThemeList values={memory.recurring_themes} />
@@ -68,11 +86,13 @@ export function MemoryStory({
             photos={photos}
             onSelectEvidence={onSelectEvidence}
           />
-          <TripMemoryEditor
-            memory={memory}
-            disabled={busy}
-            onSave={onUpdateTripMemory}
-          />
+          {isRefining ? (
+            <TripMemoryEditor
+              memory={memory}
+              disabled={busy}
+              onSave={onUpdateTripMemory}
+            />
+          ) : null}
           {memory.uncertainty_notes.length > 0 ? (
             <p className="soft-warning">
               <CircleAlert size={15} aria-hidden="true" />
@@ -111,7 +131,7 @@ export function MemoryStory({
         </section>
       ) : null}
 
-      {favoritePhotos.length > 0 ? (
+      {showKeptMoments ? (
         <section className="photo-memory-strip kept-moments">
           <div className="section-heading">
             <div>
@@ -128,6 +148,7 @@ export function MemoryStory({
                 spotlight={photo.id === spotlightPhotoId}
                 coverPhotoId={coverPhotoId}
                 disabled={busy}
+                isRefining={isRefining}
                 onSelectPhoto={onSelectPhoto}
                 onUpdatePhoto={onUpdatePhoto}
                 onSetCover={onSetCover}
@@ -143,6 +164,13 @@ export function MemoryStory({
             <span className="soft-kicker">Selected photo</span>
             <h2>Memory detail</h2>
           </div>
+          {!memory && canRefine ? (
+            <RefineToggle
+              active={isRefining}
+              disabled={busy}
+              onChange={onRefineChange}
+            />
+          ) : null}
         </div>
         {selectedPhoto ? (
           <MemoryPhotoCard
@@ -152,6 +180,7 @@ export function MemoryStory({
             editable
             coverPhotoId={coverPhotoId}
             disabled={busy}
+            isRefining={isRefining}
             onSelectPhoto={onSelectPhoto}
             onUpdatePhoto={onUpdatePhoto}
             onSetCover={onSetCover}
@@ -164,36 +193,39 @@ export function MemoryStory({
         )}
       </section>
 
-      <section className="photo-memory-strip">
-        <div className="section-heading">
-          <div>
-            <span className="soft-kicker">Photo memories</span>
-            <h2>{analyzedPhotos.length > 0 ? "Remembered photos" : "Waiting for analysis"}</h2>
+      {showPhotoMemories || analyzedPhotos.length === 0 ? (
+        <section className="photo-memory-strip">
+          <div className="section-heading">
+            <div>
+              <span className="soft-kicker">Photo memories</span>
+              <h2>{analyzedPhotos.length > 0 ? "Remembered photos" : "Waiting for analysis"}</h2>
+            </div>
           </div>
-        </div>
-        {analyzedPhotos.length > 0 ? (
-          <div className="memory-card-grid">
-            {analyzedPhotos.slice(0, 6).map((photo) => (
-              <MemoryPhotoCard
-                key={photo.id}
-                photo={photo}
-                selected={photo.id === selectedPhotoId}
-                spotlight={photo.id === spotlightPhotoId}
-                coverPhotoId={coverPhotoId}
-                disabled={busy}
-                onSelectPhoto={onSelectPhoto}
-                onUpdatePhoto={onUpdatePhoto}
-                onSetCover={onSetCover}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-memory-card">
-            <Sparkles size={22} aria-hidden="true" />
-            <p>Develop memories to turn imported photos into captions and reflections.</p>
-          </div>
-        )}
-      </section>
+          {showPhotoMemories ? (
+            <div className="memory-card-grid">
+              {analyzedPhotos.slice(0, 6).map((photo) => (
+                <MemoryPhotoCard
+                  key={photo.id}
+                  photo={photo}
+                  selected={photo.id === selectedPhotoId}
+                  spotlight={photo.id === spotlightPhotoId}
+                  coverPhotoId={coverPhotoId}
+                  disabled={busy}
+                  isRefining={isRefining}
+                  onSelectPhoto={onSelectPhoto}
+                  onUpdatePhoto={onUpdatePhoto}
+                  onSetCover={onSetCover}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-memory-card">
+              <Sparkles size={22} aria-hidden="true" />
+              <p>Develop memories to turn imported photos into captions and reflections.</p>
+            </div>
+          )}
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -205,6 +237,7 @@ function MemoryPhotoCard({
   editable,
   coverPhotoId,
   disabled,
+  isRefining,
   onSelectPhoto,
   onUpdatePhoto,
   onSetCover
@@ -215,12 +248,14 @@ function MemoryPhotoCard({
   editable?: boolean;
   coverPhotoId: number | null;
   disabled: boolean;
+  isRefining: boolean;
   onSelectPhoto: (photoId: number) => void;
   onUpdatePhoto: MemoryStoryProps["onUpdatePhoto"];
   onSetCover: MemoryStoryProps["onSetCover"];
 }) {
   const analysis = photo.analysis;
   const mood = analysis?.user_mood || analysis?.mood;
+  const isCover = coverPhotoId === photo.id;
 
   return (
     <article className={`memory-photo-card ${selected ? "selected" : ""} ${spotlight ? "spotlight" : ""}`}>
@@ -235,28 +270,31 @@ function MemoryPhotoCard({
         <span>{formatDate(photo.captured_at ?? photo.created_at)}</span>
         <h3>{analysis?.memory_caption || photo.filename}</h3>
         <p>{analysis?.scene_summary || "This photo is ready to be developed into a memory."}</p>
-        <div className="memory-actions">
-          <button
-            type="button"
-            className={photo.is_favorite ? "active" : ""}
-            disabled={disabled}
-            onClick={() => onUpdatePhoto(photo.id, { is_favorite: !photo.is_favorite })}
-            title={photo.is_favorite ? "Remove from kept moments" : "Keep this moment"}
-          >
-            <Star size={14} aria-hidden="true" />
-            <span>{photo.is_favorite ? "Kept" : "Keep"}</span>
-          </button>
-          <button
-            type="button"
-            className={coverPhotoId === photo.id ? "active" : ""}
-            disabled={disabled || coverPhotoId === photo.id}
-            onClick={() => onSetCover(photo.id)}
-            title="Use this photo as cover"
-          >
-            <Pin size={14} aria-hidden="true" />
-            <span>{coverPhotoId === photo.id ? "Cover" : "Cover"}</span>
-          </button>
-        </div>
+        <PhotoBadges isFavorite={photo.is_favorite} isCover={isCover} />
+        {isRefining ? (
+          <div className="memory-actions refine-reveal">
+            <button
+              type="button"
+              className={photo.is_favorite ? "active" : ""}
+              disabled={disabled}
+              onClick={() => onUpdatePhoto(photo.id, { is_favorite: !photo.is_favorite })}
+              title={photo.is_favorite ? "Remove from kept moments" : "Keep this moment"}
+            >
+              <Star size={14} aria-hidden="true" />
+              <span>{photo.is_favorite ? "Kept" : "Keep"}</span>
+            </button>
+            <button
+              type="button"
+              className={isCover ? "active" : ""}
+              disabled={disabled || isCover}
+              onClick={() => onSetCover(photo.id)}
+              title="Use this photo as cover"
+            >
+              <Pin size={14} aria-hidden="true" />
+              <span>{isCover ? "Cover" : "Cover"}</span>
+            </button>
+          </div>
+        ) : null}
         {analysis ? (
           <>
             <div className="memory-facts">
@@ -265,7 +303,7 @@ function MemoryPhotoCard({
               <em>{Math.round(analysis.confidence * 100)}% confidence</em>
             </div>
             {analysis.user_note ? <p className="memory-user-note">{analysis.user_note}</p> : null}
-            {editable ? (
+            {editable && isRefining ? (
               <PhotoMemoryEditor
                 photo={photo}
                 disabled={disabled}
@@ -286,6 +324,57 @@ function MemoryPhotoCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+function RefineToggle({
+  active,
+  disabled,
+  onChange
+}: {
+  active: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <button
+      className={`refine-toggle ${active ? "active" : ""}`}
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(!active)}
+    >
+      {active ? <X size={14} aria-hidden="true" /> : <SlidersHorizontal size={14} aria-hidden="true" />}
+      <span>{active ? "Done" : "Refine"}</span>
+    </button>
+  );
+}
+
+function PhotoBadges({
+  isFavorite,
+  isCover
+}: {
+  isFavorite: boolean;
+  isCover: boolean;
+}) {
+  if (!isFavorite && !isCover) {
+    return null;
+  }
+
+  return (
+    <div className="memory-badges" aria-label="Photo status">
+      {isFavorite ? (
+        <span>
+          <Star size={12} aria-hidden="true" />
+          Kept
+        </span>
+      ) : null}
+      {isCover ? (
+        <span>
+          <Pin size={12} aria-hidden="true" />
+          Cover
+        </span>
+      ) : null}
+    </div>
   );
 }
 

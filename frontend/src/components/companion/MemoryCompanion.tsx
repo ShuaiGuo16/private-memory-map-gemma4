@@ -58,8 +58,21 @@ export function MemoryCompanion({
   return (
     <aside className="memory-companion">
       <div className="companion-heading">
-        <span className="soft-kicker">Ask this trip</span>
-        <h2>Talk to your memories</h2>
+        <div className="companion-title-row">
+          <div>
+            <span className="soft-kicker">Ask this trip</span>
+            <h2>Talk to your memories</h2>
+          </div>
+          <button
+            className="companion-icon-action"
+            type="button"
+            disabled={exportDisabled}
+            onClick={onExport}
+            title="Export memory"
+          >
+            <Download size={16} aria-hidden="true" />
+          </button>
+        </div>
         <p>
           {health ? (
             <>
@@ -92,16 +105,6 @@ export function MemoryCompanion({
           </div>
         )}
       </div>
-
-      <button
-        className="export-memory-button"
-        type="button"
-        disabled={exportDisabled}
-        onClick={onExport}
-      >
-        <Download size={16} aria-hidden="true" />
-        <span>Export memory</span>
-      </button>
 
       <div className="prompt-row" aria-label="Suggested questions">
         {prompts.map((prompt) => (
@@ -152,8 +155,8 @@ export function MemoryCompanion({
         )}
       </div>
 
-      <div className="local-facts">
-        <span className="soft-kicker">Local facts</span>
+      <details className="local-facts">
+        <summary>Local facts</summary>
         <dl>
           <div>
             <dt>Model</dt>
@@ -172,7 +175,7 @@ export function MemoryCompanion({
             <dd>Local SQLite</dd>
           </div>
         </dl>
-      </div>
+      </details>
     </aside>
   );
 }

@@ -1,4 +1,11 @@
-import { Download, ImagePlus, MapPin, Pin, Sparkles } from "lucide-react";
+import {
+  Download,
+  ImagePlus,
+  MapPin,
+  MoreHorizontal,
+  Pin,
+  Sparkles
+} from "lucide-react";
 import {
   assetUrl,
   type AnalysisJob,
@@ -92,26 +99,27 @@ export function TripCover({
             <Sparkles size={17} aria-hidden="true" />
             <span>{buttonLabel}</span>
           </button>
-          <button
-            className="cover-secondary"
-            type="button"
-            disabled={!selectedPhoto || selectedPhoto.id === trip?.cover_photo_id}
-            onClick={() => selectedPhoto && onSetCover(selectedPhoto.id)}
-            title="Use selected photo as cover"
-          >
-            <Pin size={15} aria-hidden="true" />
-            <span>Set cover</span>
-          </button>
-          <button
-            className="cover-secondary"
-            type="button"
-            disabled={!trip}
-            onClick={onExport}
-            title="Export trip story"
-          >
-            <Download size={15} aria-hidden="true" />
-            <span>Export</span>
-          </button>
+          {trip ? (
+            <details className="cover-menu">
+              <summary title="More trip actions">
+                <MoreHorizontal size={18} aria-hidden="true" />
+              </summary>
+              <div className="cover-menu-popover">
+                <button
+                  type="button"
+                  disabled={!selectedPhoto || selectedPhoto.id === trip.cover_photo_id}
+                  onClick={() => selectedPhoto && onSetCover(selectedPhoto.id)}
+                >
+                  <Pin size={15} aria-hidden="true" />
+                  <span>Use selected photo as cover</span>
+                </button>
+                <button type="button" onClick={onExport}>
+                  <Download size={15} aria-hidden="true" />
+                  <span>{analyzedCount > 0 ? "Export memory" : "Export trip"}</span>
+                </button>
+              </div>
+            </details>
+          ) : null}
           <span className="cover-privacy">
             <MapPin size={14} aria-hidden="true" />
             EXIF coordinates only
