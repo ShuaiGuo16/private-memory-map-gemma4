@@ -8,6 +8,9 @@ SQLITE_COLUMNS: dict[str, dict[str, str]] = {
         "cover_photo_id": "INTEGER",
     },
     "photo": {
+        "content_sha256": "VARCHAR(64)",
+        "byte_size": "INTEGER",
+        "mime_type": "VARCHAR(120)",
         "is_favorite": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "photoanalysis": {
@@ -21,6 +24,9 @@ SQLITE_COLUMNS: dict[str, dict[str, str]] = {
         "user_narrative_summary": "VARCHAR(2500)",
         "user_note": "VARCHAR(2000)",
     },
+    "analysisjob": {
+        "mode": "VARCHAR(40) NOT NULL DEFAULT 'all'",
+    },
 }
 
 
@@ -30,6 +36,12 @@ def ensure_sqlite_compat(engine: Engine) -> None:
 
     with engine.begin() as connection:
         for table_name, columns in SQLITE_COLUMNS.items():
+            table_exists = connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            ).first()
+            if table_exists is None:
+                continue
             existing = {
                 row[1]
                 for row in connection.exec_driver_sql(

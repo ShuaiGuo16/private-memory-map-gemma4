@@ -30,11 +30,21 @@ def test_sqlite_compat_adds_usefulness_columns_to_old_schema(tmp_path):
             "raw_model_json JSON, prompt_version VARCHAR, created_at DATETIME, "
             "updated_at DATETIME)"
         )
+        connection.exec_driver_sql(
+            "CREATE TABLE analysisjob (id INTEGER PRIMARY KEY, trip_id INTEGER, "
+            "status VARCHAR, current_step VARCHAR, completed_steps INTEGER, "
+            "total_steps INTEGER, error VARCHAR, created_at DATETIME, updated_at DATETIME)"
+        )
 
     ensure_sqlite_compat(engine)
 
     assert _columns(engine, "trip") >= {"cover_photo_id"}
-    assert _columns(engine, "photo") >= {"is_favorite"}
+    assert _columns(engine, "photo") >= {
+        "content_sha256",
+        "byte_size",
+        "mime_type",
+        "is_favorite",
+    }
     assert _columns(engine, "photoanalysis") >= {
         "user_memory_caption",
         "user_scene_summary",
@@ -46,6 +56,7 @@ def test_sqlite_compat_adds_usefulness_columns_to_old_schema(tmp_path):
         "user_narrative_summary",
         "user_note",
     }
+    assert _columns(engine, "analysisjob") >= {"mode"}
 
 
 def _columns(engine, table_name: str) -> set[str]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, status
 from sqlmodel import Session, select
 
 from backend.app.api.deps import get_trip_or_404
@@ -10,11 +10,12 @@ from backend.app.api.errors import workflow_bad_request
 from backend.app.core.config import get_settings
 from backend.app.db.models import AnalysisJob, Photo, Trip, utc_now
 from backend.app.db.session import get_engine, get_session
-from backend.app.schemas.analysis import PhotoAnalysisRead
+from backend.app.schemas.analysis import AnalyzeTripRequest, PhotoAnalysisRead
 from backend.app.schemas.job import AnalysisJobRead
 from backend.app.workflows.client import GemmaClient, OllamaGemmaClient
 from backend.app.workflows.travel_memory import (
     WorkflowError,
+    WorkflowCanceled,
     analyze_photo_memory,
     run_trip_memory_workflow,
 )
@@ -47,25 +48,30 @@ def analyze_photo(
 )
 def analyze_trip(
     background_tasks: BackgroundTasks,
+    payload: AnalyzeTripRequest | None = Body(default=None),
     trip: Trip = Depends(get_trip_or_404),
     session: Session = Depends(get_session),
 ) -> AnalysisJobRead:
-    trip_id = int(trip.id)
-    photos = session.exec(select(Photo).where(Photo.trip_id == trip_id)).all()
-    total_steps = len(photos) + (1 if photos else 0)
+    job = create_analysis_job(session, int(trip.id), (payload or AnalyzeTripRequest()).mode)
+
+    background_tasks.add_task(run_analysis_job, int(job.id), get_gemma_client)
+    return AnalysisJobRead.model_validate(job)
+
+
+def create_analysis_job(session: Session, trip_id: int, mode: str = "all") -> AnalysisJob:
+    total_steps = _analysis_total_steps(session, trip_id, mode)
     job = AnalysisJob(
         trip_id=trip_id,
         status="queued",
         current_step="Queued",
         completed_steps=0,
         total_steps=total_steps,
+        mode=mode,
     )
     session.add(job)
     session.commit()
     session.refresh(job)
-
-    background_tasks.add_task(run_analysis_job, int(job.id), get_gemma_client)
-    return AnalysisJobRead.model_validate(job)
+    return job
 
 
 def run_analysis_job(
@@ -75,6 +81,9 @@ def run_analysis_job(
     with Session(get_engine()) as session:
         job = session.get(AnalysisJob, job_id)
         if job is None:
+            return
+        if job.status == "cancel_requested":
+            _save_job(session, job, status_value="canceled", current_step="Canceled")
             return
 
         try:
@@ -94,6 +103,10 @@ def run_analysis_job(
                     total_steps=total_steps,
                 )
 
+            def should_cancel() -> bool:
+                session.refresh(job)
+                return job.status == "cancel_requested"
+
             _save_job(
                 session,
                 job,
@@ -105,6 +118,8 @@ def run_analysis_job(
                 job.trip_id,
                 client=client,
                 on_progress=update_progress,
+                mode=job.mode,
+                should_cancel=should_cancel,
             )
             _save_job(
                 session,
@@ -113,6 +128,15 @@ def run_analysis_job(
                 current_step="Completed",
                 completed_steps=job.total_steps,
                 total_steps=job.total_steps,
+                error=None,
+            )
+        except WorkflowCanceled:
+            session.rollback()
+            _save_job(
+                session,
+                job,
+                status_value="canceled",
+                current_step="Canceled",
                 error=None,
             )
         except Exception as exc:
@@ -147,3 +171,12 @@ def _save_job(
     job.updated_at = utc_now()
     session.add(job)
     session.commit()
+
+
+def _analysis_total_steps(session: Session, trip_id: int, mode: str) -> int:
+    photos = session.exec(select(Photo).where(Photo.trip_id == trip_id)).all()
+    if mode == "missing":
+        photo_steps = sum(1 for photo in photos if photo.analysis is None)
+    else:
+        photo_steps = len(photos)
+    return photo_steps + (1 if photos else 0)

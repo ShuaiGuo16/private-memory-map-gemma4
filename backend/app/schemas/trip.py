@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.analysis import TripMemoryRead
 from backend.app.schemas.photo import PhotoRead
+from backend.app.schemas.question import TripQuestionRead
 
 
 class TripCreate(BaseModel):
@@ -32,3 +33,4 @@ class TripRead(BaseModel):
 class TripDetail(TripRead):
     photos: list[PhotoRead] = Field(default_factory=list)
     memory: TripMemoryRead | None = None
+    questions: list[TripQuestionRead] = Field(default_factory=list)

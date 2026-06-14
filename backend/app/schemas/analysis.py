@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -59,3 +60,7 @@ class TripMemoryRead(BaseModel):
 class TripMemoryUpdate(BaseModel):
     user_narrative_summary: str | None = Field(default=None, max_length=2500)
     user_note: str | None = Field(default=None, max_length=2000)
+
+
+class AnalyzeTripRequest(BaseModel):
+    mode: Literal["all", "missing"] = "all"

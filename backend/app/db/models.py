@@ -26,6 +26,9 @@ class Photo(SQLModel, table=True):
     trip_id: int = Field(foreign_key="trip.id", index=True)
     filename: str = Field(max_length=255)
     stored_path: str = Field(index=True, max_length=500)
+    content_sha256: str | None = Field(default=None, index=True, max_length=64)
+    byte_size: int | None = Field(default=None, ge=0)
+    mime_type: str | None = Field(default=None, max_length=120)
     captured_at: datetime | None = Field(default=None, index=True)
     latitude: float | None = Field(default=None, index=True)
     longitude: float | None = Field(default=None, index=True)
@@ -117,11 +120,21 @@ class AnalysisJob(SQLModel, table=True):
     current_step: str = Field(default="Queued", max_length=300)
     completed_steps: int = Field(default=0, ge=0)
     total_steps: int = Field(default=0, ge=0)
+    mode: str = Field(default="all", max_length=40)
     error: str | None = Field(default=None, max_length=2000)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)
 
     trip: Trip | None = Relationship(back_populates="jobs")
+
+
+class TripQuestion(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    trip_id: int = Field(foreign_key="trip.id", index=True)
+    question: str = Field(max_length=1000)
+    answer: str = Field(max_length=4000)
+    evidence_photo_ids: list[int] = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 def _string_list(value: Any) -> list[str]:

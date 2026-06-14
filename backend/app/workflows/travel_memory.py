@@ -48,6 +48,10 @@ class WorkflowValidationError(WorkflowError):
     pass
 
 
+class WorkflowCanceled(WorkflowError):
+    pass
+
+
 def analyze_photo_memory(
     session: Session,
     photo_id: int,
@@ -157,27 +161,35 @@ def run_trip_memory_workflow(
     trip_id: int,
     client: GemmaClient | None = None,
     on_progress: ProgressCallback | None = None,
+    mode: str = "all",
+    should_cancel: Callable[[], bool] | None = None,
 ) -> TripWorkflowResult:
     client = client or OllamaGemmaClient(get_settings())
     _get_trip(session, trip_id)
-    photos = session.exec(
+    all_photos = session.exec(
         select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
     ).all()
-    total_steps = len(photos) + (1 if photos else 0)
+    photos = [
+        photo for photo in all_photos if mode == "all" or photo.analysis is None
+    ]
+    total_steps = len(photos) + (1 if all_photos else 0)
     if on_progress is not None:
         on_progress("Starting analysis", 0, total_steps)
 
     analyzed_ids: list[int] = []
     for index, photo in enumerate(photos, start=1):
+        _raise_if_canceled(should_cancel)
         if on_progress is not None:
             on_progress(f"Analyzing {photo.filename}", index - 1, total_steps)
         analyze_photo_memory(session, int(photo.id), client=client)
         analyzed_ids.append(int(photo.id))
+        _raise_if_canceled(should_cancel)
         if on_progress is not None:
             on_progress(f"Analyzed {photo.filename}", index, total_steps)
 
     trip_memory_created = False
-    if analyzed_ids:
+    if _analyzed_photo_contexts(session, trip_id):
+        _raise_if_canceled(should_cancel)
         if on_progress is not None:
             on_progress("Synthesizing trip memory", len(analyzed_ids), total_steps)
         synthesize_trip_memory(session, trip_id, client=client)
@@ -193,6 +205,11 @@ def run_trip_memory_workflow(
         prompt_version=settings.prompt_version,
         qa_ready=trip_memory_created,
     )
+
+
+def _raise_if_canceled(callback: Callable[[], bool] | None) -> None:
+    if callback is not None and callback():
+        raise WorkflowCanceled("Analysis canceled")
 
 
 def call_gemma_structured(

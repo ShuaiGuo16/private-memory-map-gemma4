@@ -14,6 +14,9 @@ class PhotoRead(BaseModel):
     filename: str
     stored_path: str
     image_url: str
+    content_sha256: str | None = None
+    byte_size: int | None = None
+    mime_type: str | None = None
     captured_at: datetime | None
     latitude: float | None
     longitude: float | None
@@ -31,3 +34,17 @@ class PhotoUpdate(BaseModel):
     user_scene_summary: str | None = Field(default=None, max_length=500)
     user_mood: str | None = Field(default=None, max_length=160)
     user_note: str | None = Field(default=None, max_length=2000)
+
+
+class PhotoImportResult(BaseModel):
+    filename: str
+    status: str
+    detail: str | None = None
+    photo: PhotoRead | None = None
+
+
+class PhotoImportResponse(BaseModel):
+    results: list[PhotoImportResult]
+    stored_count: int
+    duplicate_count: int
+    rejected_count: int

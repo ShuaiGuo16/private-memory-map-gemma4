@@ -5,11 +5,18 @@ from sqlmodel import Session, select
 
 from backend.app.api.deps import get_trip_or_404
 from backend.app.api.serializers import photo_to_read
-from backend.app.db.models import Photo, Trip, TripMemory
+from backend.app.db.models import AnalysisJob, Photo, PhotoAnalysis, Trip, TripMemory, TripQuestion
 from backend.app.db.session import get_session
 from backend.app.schemas.analysis import TripMemoryRead, TripMemoryUpdate
+from backend.app.schemas.question import TripQuestionRead
 from backend.app.schemas.trip import TripCreate, TripDetail, TripRead, TripUpdate
-from backend.app.services.markdown_export import export_filename, trip_markdown
+from backend.app.services.markdown_export import (
+    export_filename,
+    export_zip_filename,
+    trip_markdown,
+    trip_zip_bytes,
+)
+from backend.app.services.storage import delete_trip_upload_dir
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -59,6 +66,11 @@ def get_trip(
         select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
     ).all()
     memory = session.get(TripMemory, trip_id)
+    questions = session.exec(
+        select(TripQuestion)
+        .where(TripQuestion.trip_id == trip_id)
+        .order_by(TripQuestion.created_at)
+    ).all()
     return TripDetail(
         id=int(trip.id),
         title=trip.title,
@@ -67,6 +79,7 @@ def get_trip(
         created_at=trip.created_at,
         photos=[photo_to_read(photo) for photo in photos],
         memory=TripMemoryRead.model_validate(memory) if memory is not None else None,
+        questions=[TripQuestionRead.model_validate(question) for question in questions],
     )
 
 
@@ -94,6 +107,24 @@ def update_trip_memory(
     return TripMemoryRead.model_validate(memory)
 
 
+@router.delete("/{trip_id}/analysis", status_code=status.HTTP_204_NO_CONTENT)
+def clear_trip_analysis(
+    trip: Trip = Depends(get_trip_or_404),
+    session: Session = Depends(get_session),
+) -> Response:
+    trip_id = int(trip.id)
+    photos = session.exec(select(Photo).where(Photo.trip_id == trip_id)).all()
+    for photo in photos:
+        analysis = session.get(PhotoAnalysis, int(photo.id))
+        if analysis is not None:
+            session.delete(analysis)
+    memory = session.get(TripMemory, trip_id)
+    if memory is not None:
+        session.delete(memory)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{trip_id}/export.md")
 def export_trip_markdown(
     trip: Trip = Depends(get_trip_or_404),
@@ -104,13 +135,70 @@ def export_trip_markdown(
         select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
     ).all()
     memory = session.get(TripMemory, trip_id)
+    questions = session.exec(
+        select(TripQuestion)
+        .where(TripQuestion.trip_id == trip_id)
+        .order_by(TripQuestion.created_at)
+    ).all()
     filename = export_filename(trip.title)
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return Response(
-        content=trip_markdown(trip, photos, memory),
+        content=trip_markdown(trip, photos, memory, questions),
         media_type="text/markdown",
         headers=headers,
     )
+
+
+@router.get("/{trip_id}/export.zip")
+def export_trip_zip(
+    trip: Trip = Depends(get_trip_or_404),
+    session: Session = Depends(get_session),
+) -> Response:
+    trip_id = int(trip.id)
+    photos = session.exec(
+        select(Photo).where(Photo.trip_id == trip_id).order_by(Photo.created_at)
+    ).all()
+    memory = session.get(TripMemory, trip_id)
+    questions = session.exec(
+        select(TripQuestion)
+        .where(TripQuestion.trip_id == trip_id)
+        .order_by(TripQuestion.created_at)
+    ).all()
+    filename = export_zip_filename(trip.title)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(
+        content=trip_zip_bytes(trip, photos, memory, questions),
+        media_type="application/zip",
+        headers=headers,
+    )
+
+
+@router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_trip(
+    trip: Trip = Depends(get_trip_or_404),
+    session: Session = Depends(get_session),
+) -> Response:
+    trip_id = int(trip.id)
+    photos = session.exec(select(Photo).where(Photo.trip_id == trip_id)).all()
+    for photo in photos:
+        analysis = session.get(PhotoAnalysis, int(photo.id))
+        if analysis is not None:
+            session.delete(analysis)
+        session.delete(photo)
+
+    memory = session.get(TripMemory, trip_id)
+    if memory is not None:
+        session.delete(memory)
+    for job in session.exec(select(AnalysisJob).where(AnalysisJob.trip_id == trip_id)).all():
+        session.delete(job)
+    for question in session.exec(
+        select(TripQuestion).where(TripQuestion.trip_id == trip_id)
+    ).all():
+        session.delete(question)
+    session.delete(trip)
+    session.commit()
+    delete_trip_upload_dir(trip_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _validate_trip_photo(
