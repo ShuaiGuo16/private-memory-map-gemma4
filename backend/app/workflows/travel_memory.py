@@ -32,6 +32,7 @@ from backend.app.workflows.schemas import (
 
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+GemmaMessage = dict[str, Any]
 ProgressCallback = Callable[[str, int, int], None]
 
 
@@ -56,41 +57,24 @@ def analyze_photo_memory(
     client = client or OllamaGemmaClient(settings)
     photo = _get_photo(session, photo_id)
     image_payload = _load_image_payload(photo, settings)
-    context = _photo_context(photo).model_dump()
+    photo_metadata = _photo_context(photo).model_dump()
 
-    messages: list[dict[str, Any]] = [
+    messages: list[GemmaMessage] = [
         {"role": "system", "content": photo_analysis_system_instruction()},
         {
             "role": "user",
-            "content": photo_analysis_prompt(context),
+            "content": photo_analysis_prompt(photo_metadata),
             "images": [image_payload],
         }
     ]
-    analysis = _call_structured(
+    analysis = call_gemma_structured(
         client=client,
         schema=PhotoMemoryAnalysis,
         messages=messages,
         settings=settings,
     )
 
-    record = session.get(PhotoAnalysis, photo_id)
-    if record is None:
-        record = PhotoAnalysis(photo_id=photo_id)
-
-    record.scene = analysis.scene_summary
-    record.activities = analysis.visible_activities
-    record.objects = analysis.visible_objects
-    record.mood = analysis.mood
-    record.memory_prompt = analysis.memory_caption
-    record.confidence = analysis.confidence
-    record.raw_model_json = {
-        "prompt_version": settings.prompt_version,
-        "photo_memory": analysis.model_dump(),
-    }
-    session.add(record)
-    session.commit()
-    session.refresh(record)
-    return record
+    return _save_photo_analysis(session, photo_id, analysis, settings)
 
 
 def synthesize_trip_memory(
@@ -106,15 +90,15 @@ def synthesize_trip_memory(
         raise WorkflowInputError("Trip has no analyzed photos to synthesize")
 
     valid_ids = {item.id for item in photo_contexts}
-    context = {
+    trip_context = {
         "trip": _trip_context(trip),
         "photo_memories": [item.model_dump() for item in photo_contexts],
     }
-    messages = [
+    messages: list[GemmaMessage] = [
         {"role": "system", "content": trip_synthesis_system_instruction()},
-        {"role": "user", "content": trip_synthesis_prompt(context)},
+        {"role": "user", "content": trip_synthesis_prompt(trip_context)},
     ]
-    synthesis = _call_structured(
+    synthesis = call_gemma_structured(
         client=client,
         schema=TripMemorySynthesis,
         messages=messages,
@@ -122,30 +106,7 @@ def synthesize_trip_memory(
         validator=lambda item: _validate_trip_synthesis_ids(item, valid_ids),
     )
 
-    record = session.get(TripMemory, trip_id)
-    now = utc_now()
-    if record is None:
-        record = TripMemory(trip_id=trip_id, created_at=now)
-
-    record.narrative_summary = synthesis.narrative_summary
-    record.inferred_interests = synthesis.inferred_interests
-    record.recurring_themes = synthesis.recurring_themes
-    record.memorable_moments = [
-        moment.model_dump() for moment in synthesis.memorable_moments
-    ]
-    record.evidence_photo_ids = synthesis.evidence_photo_ids
-    record.uncertainty_notes = synthesis.uncertainty_notes
-    record.raw_model_json = {
-        "prompt_version": settings.prompt_version,
-        "trip_memory": synthesis.model_dump(),
-    }
-    record.prompt_version = settings.prompt_version
-    record.updated_at = now
-
-    session.add(record)
-    session.commit()
-    session.refresh(record)
-    return record
+    return _save_trip_memory(session, trip_id, synthesis, settings)
 
 
 def answer_trip_question_with_gemma(
@@ -167,18 +128,18 @@ def answer_trip_question_with_gemma(
 
     valid_ids = {item.id for item in photo_contexts}
     trip_memory = session.get(TripMemory, trip_id)
-    context = {
+    question_context = {
         "trip": _trip_context(trip),
         "question": question,
         "allowed_photo_ids": sorted(valid_ids),
         "trip_memory": _trip_memory_context(trip_memory),
         "photo_memories": [item.model_dump() for item in photo_contexts],
     }
-    messages = [
+    messages: list[GemmaMessage] = [
         {"role": "system", "content": trip_question_system_instruction()},
-        {"role": "user", "content": trip_question_prompt(context)},
+        {"role": "user", "content": trip_question_prompt(question_context)},
     ]
-    answer = _call_structured(
+    answer = call_gemma_structured(
         client=client,
         schema=GroundedTripAnswer,
         messages=messages,
@@ -208,8 +169,6 @@ def run_trip_memory_workflow(
 
     analyzed_ids: list[int] = []
     for index, photo in enumerate(photos, start=1):
-        if photo.id is None:
-            continue
         if on_progress is not None:
             on_progress(f"Analyzing {photo.filename}", index - 1, total_steps)
         analyze_photo_memory(session, int(photo.id), client=client)
@@ -236,7 +195,7 @@ def run_trip_memory_workflow(
     )
 
 
-def _call_structured(
+def call_gemma_structured(
     *,
     client: GemmaClient,
     schema: type[SchemaT],
@@ -269,6 +228,61 @@ def _call_structured(
     raise WorkflowValidationError(
         f"Gemma response did not satisfy {schema.__name__}"
     ) from last_error
+
+
+def _save_photo_analysis(
+    session: Session,
+    photo_id: int,
+    analysis: PhotoMemoryAnalysis,
+    settings: Settings,
+) -> PhotoAnalysis:
+    record = session.get(PhotoAnalysis, photo_id) or PhotoAnalysis(photo_id=photo_id)
+    record.scene = analysis.scene_summary
+    record.activities = analysis.visible_activities
+    record.objects = analysis.visible_objects
+    record.mood = analysis.mood
+    record.memory_prompt = analysis.memory_caption
+    record.confidence = analysis.confidence
+    record.raw_model_json = {
+        "prompt_version": settings.prompt_version,
+        "photo_memory": analysis.model_dump(),
+    }
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return record
+
+
+def _save_trip_memory(
+    session: Session,
+    trip_id: int,
+    synthesis: TripMemorySynthesis,
+    settings: Settings,
+) -> TripMemory:
+    now = utc_now()
+    record = session.get(TripMemory, trip_id) or TripMemory(
+        trip_id=trip_id,
+        created_at=now,
+    )
+    record.narrative_summary = synthesis.narrative_summary
+    record.inferred_interests = synthesis.inferred_interests
+    record.recurring_themes = synthesis.recurring_themes
+    record.memorable_moments = [
+        moment.model_dump() for moment in synthesis.memorable_moments
+    ]
+    record.evidence_photo_ids = synthesis.evidence_photo_ids
+    record.uncertainty_notes = synthesis.uncertainty_notes
+    record.raw_model_json = {
+        "prompt_version": settings.prompt_version,
+        "trip_memory": synthesis.model_dump(),
+    }
+    record.prompt_version = settings.prompt_version
+    record.updated_at = now
+
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return record
 
 
 def _model_options(settings: Settings) -> dict[str, Any]:
