@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { RotateCcw, Save, Search, SlidersHorizontal, Trash2, Plus } from "lucide-react";
+import { RotateCcw, Save, Search, Trash2, Plus } from "lucide-react";
 import {
   analyzeTrip,
   askTrip,
@@ -32,7 +32,8 @@ import { MemoryMap } from "../components/map/MemoryMap";
 import { PhotoMosaic } from "../components/photo/PhotoMosaic";
 import { MemoryStory } from "../components/story/MemoryStory";
 import { TripCover } from "../components/story/TripCover";
-import { type MemoryView, ViewSwitcher } from "../components/story/ViewSwitcher";
+import { type ExploreView, ViewSwitcher } from "../components/story/ViewSwitcher";
+import { type WorkspaceTab, WorkspaceTabs } from "../components/story/WorkspaceTabs";
 import { MemoryTimeline } from "../components/timeline/MemoryTimeline";
 import { UploadPanel } from "../components/upload/UploadPanel";
 
@@ -50,14 +51,14 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   const [selectedTripDetail, setSelectedTripDetail] = useState<TripDetail | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<number | null>(null);
   const [spotlightPhotoId, setSpotlightPhotoId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<MemoryView>("story");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("read");
+  const [activeView, setActiveView] = useState<ExploreView>("timeline");
   const [title, setTitle] = useState("First private trip");
   const [description, setDescription] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [askResponse, setAskResponse] = useState<AskResponse | null>(null);
   const [activeJob, setActiveJob] = useState<AnalysisJob | null>(null);
-  const [isRefining, setIsRefining] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [importResult, setImportResult] = useState<PhotoImportResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -229,9 +230,9 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       setSpotlightPhotoId(null);
       setAskResponse(null);
       setActiveJob(null);
-      setIsRefining(false);
       setIsCreatingTrip(false);
-      setActiveView("story");
+      setActiveWorkspaceTab("read");
+      setActiveView("timeline");
       setTitle("");
       setDescription("");
     });
@@ -257,7 +258,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       const job = await analyzeTrip(selectedTripId, mode);
       setActiveJob(job);
       setAskResponse(null);
-      setActiveView("story");
+      setActiveWorkspaceTab("read");
     });
   }
 
@@ -437,7 +438,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       setActiveJob(job);
       if (job.status === "completed") {
         await loadTripDetail(job.trip_id);
-        setActiveView("story");
+        setActiveWorkspaceTab("read");
       }
       if (job.status === "canceled") {
         setMessage("Analysis canceled");
@@ -458,14 +459,14 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
   function handleSelectEvidence(photoId: number) {
     handleSelectPhoto(photoId);
-    setActiveView("story");
+    setActiveWorkspaceTab("read");
   }
 
   function handleSelectTrip(tripId: number) {
     setSelectedTripId(tripId);
     setAskResponse(null);
     setActiveJob(null);
-    setIsRefining(false);
+    setActiveWorkspaceTab("read");
     setImportResult(null);
     setSearchQuery("");
     setFilters({
@@ -478,10 +479,28 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     });
     setDateFrom("");
     setDateTo("");
-    setActiveView("story");
+    setActiveView("timeline");
   }
 
   const createTripOpen = trips.length === 0 || isCreatingTrip;
+  const renderMemoryStory = (refineMode: boolean) => (
+    <MemoryStory
+      memory={selectedTripDetail?.memory ?? null}
+      photos={photos}
+      selectedPhoto={selectedPhoto}
+      selectedPhotoId={selectedPhoto?.id ?? null}
+      spotlightPhotoId={spotlightPhotoId}
+      coverPhotoId={selectedTrip?.cover_photo_id ?? null}
+      busy={busy}
+      isRefining={refineMode}
+      onSelectPhoto={handleSelectPhoto}
+      onSelectEvidence={handleSelectEvidence}
+      onUpdatePhoto={handleUpdatePhoto}
+      onUpdateTripMemory={handleUpdateTripMemory}
+      onSetCover={handleSetCover}
+      onRefineChange={(value) => setActiveWorkspaceTab(value ? "refine" : "read")}
+    />
+  );
 
   return (
     <section className="workspace story-workspace">
@@ -555,39 +574,12 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           </div>
         </div>
 
-        {selectedTrip ? (
-          <button
-            className={`rail-refine-toggle ${isRefining ? "active" : ""}`}
-            type="button"
-            onClick={() => setIsRefining((current) => !current)}
-          >
-            <SlidersHorizontal size={14} aria-hidden="true" />
-            <span>{isRefining ? "Reading mode" : "Refine trip"}</span>
-          </button>
-        ) : null}
-
         <UploadPanel
           disabled={selectedTripId === null || busy || analysisRunning}
           compact={tripStage === "memoryReady"}
           importResult={importResult}
           onUpload={handleUpload}
         />
-
-        {selectedTrip && isRefining ? (
-          <TripManagePanel
-            title={editTitle}
-            description={editDescription}
-            busy={busy}
-            hasAnalysis={hasAnalyzedPhotos || Boolean(selectedTripDetail?.memory)}
-            selectedPhoto={selectedPhoto}
-            onTitleChange={setEditTitle}
-            onDescriptionChange={setEditDescription}
-            onSave={handleSaveTripDetails}
-            onDeletePhoto={handleDeleteSelectedPhoto}
-            onClearAnalysis={handleClearAnalysis}
-            onDeleteTrip={handleDeleteTrip}
-          />
-        ) : null}
       </aside>
 
       <main className="memory-reader">
@@ -617,128 +609,145 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           onExportZip={handleExportZip}
         />
 
-        <ViewSwitcher
-          activeView={activeView}
-          photoCount={photos.length}
-          onChange={setActiveView}
-        />
-
-        <SearchFilters
-          query={searchQuery}
-          filters={filters}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          resultCount={filteredPhotos.length}
-          totalCount={photos.length}
-          onQueryChange={setSearchQuery}
-          onFilterChange={(key) =>
-            setFilters((current) => ({ ...current, [key]: !current[key] }))
-          }
-          onDateFromChange={setDateFrom}
-          onDateToChange={setDateTo}
-          onClear={() => {
-            setSearchQuery("");
-            setDateFrom("");
-            setDateTo("");
-            setFilters({
-              favorites: false,
-              mapped: false,
-              noGps: false,
-              analyzed: false,
-              needsAnalysis: false,
-              uncertain: false
-            });
-          }}
+        <WorkspaceTabs
+          activeTab={activeWorkspaceTab}
+          onChange={setActiveWorkspaceTab}
         />
 
         <div className="memory-surface">
-          {activeView === "story" ? (
-            <MemoryStory
-              memory={selectedTripDetail?.memory ?? null}
-              photos={photos}
-              selectedPhoto={selectedPhoto}
-              selectedPhotoId={selectedPhoto?.id ?? null}
-              spotlightPhotoId={spotlightPhotoId}
-              coverPhotoId={selectedTrip?.cover_photo_id ?? null}
-              busy={busy}
-              isRefining={isRefining}
-              onSelectPhoto={handleSelectPhoto}
-              onSelectEvidence={handleSelectEvidence}
-              onUpdatePhoto={handleUpdatePhoto}
-              onUpdateTripMemory={handleUpdateTripMemory}
-              onSetCover={handleSetCover}
-              onRefineChange={setIsRefining}
-            />
-          ) : null}
+          {activeWorkspaceTab === "read" ? renderMemoryStory(false) : null}
 
-          {activeView === "timeline" ? (
-            <MemoryTimeline
-              photos={filteredPhotos}
-              selectedPhotoId={selectedPhoto?.id ?? null}
-              spotlightPhotoId={spotlightPhotoId}
-              onSelectPhoto={handleSelectPhoto}
-            />
-          ) : null}
-
-          {activeView === "map" ? (
-            <section className="map-view">
-              <div className="section-heading">
-                <div>
-                  <span className="soft-kicker">Map context</span>
-                  <h2>Places from EXIF metadata</h2>
-                </div>
-              </div>
-              <div className="map-stat-row">
-                <span>
-                  <strong>{filteredPhotos.length}</strong>
-                  Photos
-                </span>
-                <span>
-                  <strong>{filteredLocatedCount}</strong>
-                  Mapped
-                </span>
-                <span>
-                  <strong>{filteredPhotos.length - filteredLocatedCount}</strong>
-                  Without GPS
-                </span>
-              </div>
-              <MemoryMap
-                photos={filteredPhotos}
-                selectedPhotoId={selectedPhoto?.id ?? null}
-                onSelectPhoto={handleSelectPhoto}
+          {activeWorkspaceTab === "explore" ? (
+            <section className="explore-view">
+              <SearchFilters
+                query={searchQuery}
+                filters={filters}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                resultCount={filteredPhotos.length}
+                totalCount={photos.length}
+                onQueryChange={setSearchQuery}
+                onFilterChange={(key) =>
+                  setFilters((current) => ({ ...current, [key]: !current[key] }))
+                }
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onClear={() => {
+                  setSearchQuery("");
+                  setDateFrom("");
+                  setDateTo("");
+                  setFilters({
+                    favorites: false,
+                    mapped: false,
+                    noGps: false,
+                    analyzed: false,
+                    needsAnalysis: false,
+                    uncertain: false
+                  });
+                }}
               />
+
+              <ViewSwitcher
+                activeView={activeView}
+                photoCount={photos.length}
+                onChange={setActiveView}
+              />
+
+              {activeView === "timeline" ? (
+                <MemoryTimeline
+                  photos={filteredPhotos}
+                  selectedPhotoId={selectedPhoto?.id ?? null}
+                  spotlightPhotoId={spotlightPhotoId}
+                  onSelectPhoto={handleSelectPhoto}
+                />
+              ) : null}
+
+              {activeView === "map" ? (
+                <section className="map-view">
+                  <div className="section-heading">
+                    <div>
+                      <span className="soft-kicker">Map context</span>
+                      <h2>Places from EXIF metadata</h2>
+                    </div>
+                  </div>
+                  <div className="map-stat-row">
+                    <span>
+                      <strong>{filteredPhotos.length}</strong>
+                      Photos
+                    </span>
+                    <span>
+                      <strong>{filteredLocatedCount}</strong>
+                      Mapped
+                    </span>
+                    <span>
+                      <strong>{filteredPhotos.length - filteredLocatedCount}</strong>
+                      Without GPS
+                    </span>
+                  </div>
+                  <MemoryMap
+                    photos={filteredPhotos}
+                    selectedPhotoId={selectedPhoto?.id ?? null}
+                    onSelectPhoto={handleSelectPhoto}
+                  />
+                </section>
+              ) : null}
+
+              {activeView === "photos" ? (
+                <PhotoMosaic
+                  photos={filteredPhotos}
+                  selectedPhotoId={selectedPhoto?.id ?? null}
+                  spotlightPhotoId={spotlightPhotoId}
+                  coverPhotoId={selectedTrip?.cover_photo_id ?? null}
+                  isRefining={false}
+                  onSelectPhoto={handleSelectPhoto}
+                  onUpdatePhoto={handleUpdatePhoto}
+                />
+              ) : null}
             </section>
           ) : null}
 
-          {activeView === "photos" ? (
-            <PhotoMosaic
-              photos={filteredPhotos}
-              selectedPhotoId={selectedPhoto?.id ?? null}
-              spotlightPhotoId={spotlightPhotoId}
-              coverPhotoId={selectedTrip?.cover_photo_id ?? null}
-              isRefining={isRefining}
-              onSelectPhoto={handleSelectPhoto}
-              onUpdatePhoto={handleUpdatePhoto}
-            />
+          {activeWorkspaceTab === "refine" ? (
+            <section className="refine-view">
+              {selectedTrip ? (
+                <TripManagePanel
+                  title={editTitle}
+                  description={editDescription}
+                  busy={busy}
+                  hasAnalysis={hasAnalyzedPhotos || Boolean(selectedTripDetail?.memory)}
+                  selectedPhoto={selectedPhoto}
+                  onTitleChange={setEditTitle}
+                  onDescriptionChange={setEditDescription}
+                  onSave={handleSaveTripDetails}
+                  onDeletePhoto={handleDeleteSelectedPhoto}
+                  onClearAnalysis={handleClearAnalysis}
+                  onDeleteTrip={handleDeleteTrip}
+                />
+              ) : null}
+              {renderMemoryStory(true)}
+            </section>
+          ) : null}
+
+          {activeWorkspaceTab === "ask" ? (
+            <section className="ask-view">
+              <MemoryCompanion
+                health={health}
+                healthError={healthError}
+                askDisabled={!canAsk || busy || analysisRunning}
+                job={activeJob}
+                tripMemory={selectedTripDetail?.memory ?? null}
+                askResponse={askResponse}
+                questions={selectedTripDetail?.questions ?? []}
+                photos={photos}
+                exportDisabled={selectedTripId === null || busy}
+                onAsk={handleAsk}
+                onSelectEvidence={handleSelectEvidence}
+                onExportMarkdown={handleExportMarkdown}
+                onExportZip={handleExportZip}
+              />
+            </section>
           ) : null}
         </div>
       </main>
-
-      <MemoryCompanion
-        health={health}
-        healthError={healthError}
-        askDisabled={!canAsk || busy || analysisRunning}
-        job={activeJob}
-        tripMemory={selectedTripDetail?.memory ?? null}
-        askResponse={askResponse}
-        questions={selectedTripDetail?.questions ?? []}
-        photos={photos}
-        exportDisabled={selectedTripId === null || busy}
-        onAsk={handleAsk}
-        onSelectEvidence={handleSelectEvidence}
-        onExportMarkdown={handleExportMarkdown}
-        onExportZip={handleExportZip}
-      />
 
       {message ? <div className="toast">{message}</div> : null}
     </section>

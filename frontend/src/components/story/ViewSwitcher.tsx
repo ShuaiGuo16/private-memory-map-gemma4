@@ -1,20 +1,14 @@
-import { BookOpenText, Images, Map, Rows3 } from "lucide-react";
+import { Images, Map, Rows3 } from "lucide-react";
 
-export type MemoryView = "story" | "timeline" | "map" | "photos";
+export type ExploreView = "timeline" | "map" | "photos";
 
 type ViewSwitcherProps = {
-  activeView: MemoryView;
+  activeView: ExploreView;
   photoCount: number;
-  onChange: (view: MemoryView) => void;
+  onChange: (view: ExploreView) => void;
 };
 
 const views = [
-  {
-    id: "story",
-    label: "Story",
-    description: "Reflections",
-    icon: BookOpenText
-  },
   {
     id: "timeline",
     label: "Timeline",
@@ -34,10 +28,10 @@ const views = [
     icon: Images
   }
 ] satisfies Array<{
-  id: MemoryView;
+  id: ExploreView;
   label: string;
   description: string;
-  icon: typeof BookOpenText;
+  icon: typeof Rows3;
 }>;
 
 export function ViewSwitcher({
