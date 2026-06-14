@@ -5,6 +5,7 @@ from functools import lru_cache
 from sqlmodel import Session, SQLModel, create_engine
 
 from backend.app.core.config import get_settings
+from backend.app.db.compat import ensure_sqlite_compat
 
 
 @lru_cache
@@ -22,7 +23,9 @@ def get_engine():
 def init_db() -> None:
     from backend.app.db import models  # noqa: F401
 
-    SQLModel.metadata.create_all(get_engine())
+    engine = get_engine()
+    SQLModel.metadata.create_all(engine)
+    ensure_sqlite_compat(engine)
 
 
 def get_session():

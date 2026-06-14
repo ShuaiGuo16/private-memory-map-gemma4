@@ -13,6 +13,7 @@ class Trip(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str = Field(index=True, min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=1000)
+    cover_photo_id: int | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
 
     photos: list["Photo"] = Relationship(back_populates="trip")
@@ -29,6 +30,7 @@ class Photo(SQLModel, table=True):
     latitude: float | None = Field(default=None, index=True)
     longitude: float | None = Field(default=None, index=True)
     exif_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    is_favorite: bool = Field(default=False, index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
 
     trip: Trip | None = Relationship(back_populates="photos")
@@ -44,6 +46,11 @@ class PhotoAnalysis(SQLModel, table=True):
     memory_prompt: str = Field(default="", max_length=1000)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     raw_model_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    user_memory_caption: str | None = Field(default=None, max_length=1000)
+    user_scene_summary: str | None = Field(default=None, max_length=500)
+    user_mood: str | None = Field(default=None, max_length=160)
+    user_note: str | None = Field(default=None, max_length=2000)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     photo: Photo | None = Relationship(back_populates="analysis")
 
@@ -54,11 +61,11 @@ class PhotoAnalysis(SQLModel, table=True):
 
     @property
     def scene_summary(self) -> str:
-        return str(self.photo_memory.get("scene_summary") or self.scene)
+        return str(self.user_scene_summary or self.photo_memory.get("scene_summary") or self.scene)
 
     @property
     def memory_caption(self) -> str:
-        return str(self.photo_memory.get("memory_caption") or self.memory_prompt)
+        return str(self.user_memory_caption or self.photo_memory.get("memory_caption") or self.memory_prompt)
 
     @property
     def place_type(self) -> str:
@@ -94,6 +101,8 @@ class TripMemory(SQLModel, table=True):
     evidence_photo_ids: list[int] = Field(default_factory=list, sa_column=Column(JSON))
     uncertainty_notes: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     raw_model_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    user_narrative_summary: str | None = Field(default=None, max_length=2500)
+    user_note: str | None = Field(default=None, max_length=2000)
     prompt_version: str = Field(default="travel-memory-v1", max_length=80, index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now, index=True)

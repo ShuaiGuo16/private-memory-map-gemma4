@@ -15,6 +15,11 @@ class PhotoAnalysisRead(BaseModel):
     memory_prompt: str
     confidence: float = Field(ge=0.0, le=1.0)
     raw_model_json: dict[str, Any]
+    user_memory_caption: str | None = None
+    user_scene_summary: str | None = None
+    user_mood: str | None = None
+    user_note: str | None = None
+    updated_at: datetime | None = None
     scene_summary: str = ""
     memory_caption: str = ""
     place_type: str = ""
@@ -42,8 +47,15 @@ class TripMemoryRead(BaseModel):
     evidence_photo_ids: list[int]
     uncertainty_notes: list[str]
     raw_model_json: dict[str, Any]
+    user_narrative_summary: str | None = None
+    user_note: str | None = None
     prompt_version: str
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TripMemoryUpdate(BaseModel):
+    user_narrative_summary: str | None = Field(default=None, max_length=2500)
+    user_note: str | None = Field(default=None, max_length=2000)

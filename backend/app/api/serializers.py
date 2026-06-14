@@ -16,6 +16,7 @@ def photo_to_read(photo: Photo) -> PhotoRead:
         latitude=photo.latitude,
         longitude=photo.longitude,
         exif_json=photo.exif_json,
+        is_favorite=photo.is_favorite,
         created_at=photo.created_at,
         analysis=(
             PhotoAnalysisRead.model_validate(photo.analysis)
