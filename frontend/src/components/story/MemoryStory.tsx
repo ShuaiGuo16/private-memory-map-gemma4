@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Camera,
   CircleAlert,
@@ -62,6 +62,18 @@ export function MemoryStory({
   const canRefine = Boolean(memory || analyzedPhotos.length > 0);
   const showKeptMoments = favoritePhotos.length > 1;
   const showPhotoMemories = analyzedPhotos.length > 1;
+  const selectedMemoryRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (spotlightPhotoId && selectedPhoto?.id === spotlightPhotoId) {
+      selectedMemoryRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "center",
+      });
+    }
+  }, [spotlightPhotoId, selectedPhoto?.id]);
 
   return (
     <section className="story-view">
@@ -158,7 +170,7 @@ export function MemoryStory({
         </section>
       ) : null}
 
-      <section className="selected-memory">
+      <section className="selected-memory" ref={selectedMemoryRef}>
         <div className="section-heading">
           <div>
             <span className="soft-kicker">Selected photo</span>

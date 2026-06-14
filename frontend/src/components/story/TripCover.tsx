@@ -17,6 +17,7 @@ import { jobPercent, jobStage } from "./jobStatus";
 type TripCoverProps = {
   trip: Trip | null;
   coverPhoto: Photo | null;
+  photos: Photo[];
   selectedPhoto: Photo | null;
   photoCount: number;
   locatedCount: number;
@@ -31,6 +32,7 @@ type TripCoverProps = {
 export function TripCover({
   trip,
   coverPhoto,
+  photos,
   selectedPhoto,
   photoCount,
   locatedCount,
@@ -126,6 +128,17 @@ export function TripCover({
           </span>
         </div>
       </div>
+      {photos.length > 0 ? (
+        <div className="cover-contact-strip" aria-label="Trip photo contact strip">
+          {photos.slice(0, 5).map((photo) => (
+            <img
+              key={photo.id}
+              src={assetUrl(photo.image_url)}
+              alt={photo.analysis?.memory_caption || photo.filename}
+            />
+          ))}
+        </div>
+      ) : null}
       {job ? <CoverJob job={job} /> : null}
     </section>
   );

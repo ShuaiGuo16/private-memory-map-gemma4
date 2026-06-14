@@ -12,8 +12,10 @@ import type {
   AnalysisJob,
   AskResponse,
   HealthResponse,
+  Photo,
   TripMemory
 } from "../../api/client";
+import { assetUrl } from "../../api/client";
 import { jobPercent, jobStage } from "../story/jobStatus";
 
 type MemoryCompanionProps = {
@@ -23,6 +25,7 @@ type MemoryCompanionProps = {
   job: AnalysisJob | null;
   tripMemory: TripMemory | null;
   askResponse: AskResponse | null;
+  photos: Photo[];
   exportDisabled: boolean;
   onAsk: (question: string) => void;
   onSelectEvidence: (photoId: number) => void;
@@ -36,6 +39,7 @@ export function MemoryCompanion({
   job,
   tripMemory,
   askResponse,
+  photos,
   exportDisabled,
   onAsk,
   onSelectEvidence,
@@ -95,6 +99,7 @@ export function MemoryCompanion({
             {tripMemory.user_note ? <em>{tripMemory.user_note}</em> : null}
             <EvidenceButtons
               ids={tripMemory.evidence_photo_ids}
+              photos={photos}
               onSelectEvidence={onSelectEvidence}
             />
           </>
@@ -140,6 +145,7 @@ export function MemoryCompanion({
             <p>{askResponse.answer}</p>
             <EvidenceButtons
               ids={askResponse.evidence_photo_ids}
+              photos={photos}
               onSelectEvidence={onSelectEvidence}
             />
           </>
@@ -202,9 +208,11 @@ function CompanionProgress({ job }: { job: AnalysisJob }) {
 
 function EvidenceButtons({
   ids,
+  photos,
   onSelectEvidence
 }: {
   ids: number[];
+  photos: Photo[];
   onSelectEvidence: (photoId: number) => void;
 }) {
   if (ids.length === 0) {
@@ -214,11 +222,20 @@ function EvidenceButtons({
   return (
     <div className="companion-evidence">
       <span>Evidence</span>
-      {ids.map((id) => (
-        <button key={id} type="button" onClick={() => onSelectEvidence(id)}>
-          #{id}
-        </button>
-      ))}
+      {ids.map((id) => {
+        const photo = photos.find((item) => item.id === id);
+        return (
+          <button key={id} type="button" onClick={() => onSelectEvidence(id)}>
+            {photo ? (
+              <img
+                src={assetUrl(photo.image_url)}
+                alt={photo.analysis?.memory_caption || photo.filename}
+              />
+            ) : null}
+            <em>#{id}</em>
+          </button>
+        );
+      })}
     </div>
   );
 }

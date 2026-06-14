@@ -398,6 +398,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         <TripCover
           trip={selectedTrip}
           coverPhoto={coverPhoto}
+          photos={photos}
           selectedPhoto={selectedPhoto}
           photoCount={photos.length}
           locatedCount={locatedCount}
@@ -488,6 +489,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
         job={activeJob}
         tripMemory={selectedTripDetail?.memory ?? null}
         askResponse={askResponse}
+        photos={photos}
         exportDisabled={selectedTripId === null || busy}
         onAsk={handleAsk}
         onSelectEvidence={handleSelectEvidence}
