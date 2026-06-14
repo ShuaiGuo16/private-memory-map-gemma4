@@ -17,3 +17,10 @@ def test_trip_create_and_list(client):
     trips = list_response.json()
     assert len(trips) == 1
     assert trips[0]["id"] == created["id"]
+
+
+def test_missing_trip_detail_returns_404(client):
+    response = client.get("/api/trips/999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Trip not found"

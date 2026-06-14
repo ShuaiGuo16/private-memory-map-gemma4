@@ -65,6 +65,16 @@ def test_analyze_route_creates_job_and_stores_workflow_outputs(client, monkeypat
     assert detail["photos"][0]["analysis"]["place_type"] == "historic street"
 
 
+def test_analysis_and_job_routes_return_404_for_missing_records(client):
+    analyze_response = client.post("/api/trips/999/analyze")
+    assert analyze_response.status_code == 404
+    assert analyze_response.json()["detail"] == "Trip not found"
+
+    job_response = client.get("/api/jobs/999")
+    assert job_response.status_code == 404
+    assert job_response.json()["detail"] == "Job not found"
+
+
 def test_analyze_route_marks_job_failed_when_workflow_fails(client, monkeypatch):
     from backend.app.api.routes import analysis
 
@@ -109,6 +119,16 @@ def test_ask_route_uses_workflow_function(client, monkeypatch):
         "evidence_photo_ids": [7],
     }
     assert called == {"trip_id": trip["id"], "question": "What did I like?"}
+
+
+def test_ask_route_returns_404_for_missing_trip(client):
+    response = client.post(
+        "/api/trips/999/ask",
+        json={"question": "What did I like?"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Trip not found"
 
 
 def _image_bytes() -> bytes:
