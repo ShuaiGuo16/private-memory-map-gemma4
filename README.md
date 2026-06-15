@@ -205,6 +205,14 @@ Run the real Gemma workflow against one image:
 The smoke script depends on local model availability and hardware speed, so it
 is not part of automated tests.
 
+Seed a small synthetic trip without calling Gemma:
+
+```powershell
+.\.venv\Scripts\python scripts\seed_demo_trip.py
+```
+
+Use `--replace` to recreate the seeded demo trip.
+
 ## API Surface
 
 - `GET /api/health`
@@ -222,6 +230,7 @@ is not part of automated tests.
 - `GET /api/jobs/{job_id}`
 - `POST /api/jobs/{job_id}/cancel`
 - `POST /api/jobs/{job_id}/retry`
+- `GET /api/trips/{trip_id}/jobs/latest`
 - `POST /api/trips/{trip_id}/ask`
 - `GET /api/trips/{trip_id}/questions`
 - `PATCH /api/trips/{trip_id}`

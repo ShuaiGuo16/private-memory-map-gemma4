@@ -13,7 +13,13 @@ import {
   type Photo,
   type Trip
 } from "../../api/client";
-import { jobPercent, jobStage } from "./jobStatus";
+import {
+  jobDetail,
+  jobPercent,
+  jobRemaining,
+  jobStage,
+  jobStepCount
+} from "./jobStatus";
 
 type TripCoverProps = {
   trip: Trip | null;
@@ -25,6 +31,7 @@ type TripCoverProps = {
   analyzedCount: number;
   missingAnalysisCount: number;
   backendReady: boolean;
+  modelReady: boolean;
   analyzeDisabled: boolean;
   job: AnalysisJob | null;
   onAnalyze: (mode: "all" | "missing") => void;
@@ -45,6 +52,7 @@ export function TripCover({
   analyzedCount,
   missingAnalysisCount,
   backendReady,
+  modelReady,
   analyzeDisabled,
   job,
   onAnalyze,
@@ -69,6 +77,8 @@ export function TripCover({
         ? "Developing..."
         : !backendReady
           ? "Backend offline"
+          : !modelReady
+            ? "Model not ready"
           : analyzedCount > 0 && missingAnalysisCount > 0
             ? "Develop new photos"
         : analyzedCount > 0
@@ -191,19 +201,30 @@ function CoverJob({
   onRetryJob: () => void;
 }) {
   const percent = jobPercent(job);
+  const detail = jobDetail(job);
+  const stepCount = jobStepCount(job);
+  const remaining = jobRemaining(job);
   const running = job.status === "queued" || job.status === "running";
   const retryable = job.status === "failed" || job.status === "canceled";
+  const cancelLabel =
+    job.status === "running" ? "Cancel after current step" : "Cancel";
   return (
     <div className={`cover-job ${job.status}`}>
       <div>
         <strong>{jobStage(job)}</strong>
         <span>{percent}%</span>
       </div>
+      <p className="job-step-line">{detail}</p>
       <progress max={100} value={percent} />
-      {job.error ? <p>{job.error}</p> : null}
+      {stepCount || remaining ? (
+        <div className="job-meta-row">
+          {stepCount ? <span>{stepCount}</span> : null}
+          {remaining ? <span>{remaining}</span> : null}
+        </div>
+      ) : null}
       {running ? (
         <button type="button" onClick={onCancelJob}>
-          Cancel
+          {cancelLabel}
         </button>
       ) : null}
       {retryable ? (

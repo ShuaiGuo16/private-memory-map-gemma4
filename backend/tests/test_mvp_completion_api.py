@@ -98,11 +98,26 @@ def test_clear_analysis_keeps_photos_and_user_curation(client, monkeypatch):
     trip, photo = _analyzed_trip(client, monkeypatch)
     client.patch(f"/api/photos/{photo['id']}", json={"is_favorite": True})
 
+    from backend.app.db.models import TripQuestion
+    from backend.app.db.session import get_engine
+
+    with Session(get_engine()) as session:
+        session.add(
+            TripQuestion(
+                trip_id=trip["id"],
+                question="What did I like?",
+                answer="Tiles.",
+                evidence_photo_ids=[photo["id"]],
+            )
+        )
+        session.commit()
+
     response = client.delete(f"/api/trips/{trip['id']}/analysis")
 
     assert response.status_code == 204
     detail = client.get(f"/api/trips/{trip['id']}").json()
     assert detail["memory"] is None
+    assert detail["questions"] == []
     assert detail["photos"][0]["analysis"] is None
     assert detail["photos"][0]["is_favorite"] is True
 
@@ -176,6 +191,46 @@ def test_job_cancel_and_retry_endpoints(client, monkeypatch):
     retry = retry_response.json()
     assert retry["id"] != job_id
     assert retry["mode"] == "missing"
+
+
+def test_latest_trip_job_returns_latest_recoverable_job(client):
+    from backend.app.db.models import AnalysisJob, Trip
+    from backend.app.db.session import get_engine
+
+    with Session(get_engine()) as session:
+        trip = Trip(title="Recover Jobs")
+        session.add(trip)
+        session.commit()
+        session.refresh(trip)
+        completed = AnalysisJob(
+            trip_id=int(trip.id),
+            status="completed",
+            current_step="Completed",
+            completed_steps=2,
+            total_steps=2,
+            mode="all",
+        )
+        failed = AnalysisJob(
+            trip_id=int(trip.id),
+            status="failed",
+            current_step="Failed",
+            completed_steps=1,
+            total_steps=2,
+            mode="missing",
+            error="Model stopped",
+        )
+        session.add(completed)
+        session.add(failed)
+        session.commit()
+        session.refresh(trip)
+
+    response = client.get(f"/api/trips/{trip.id}/jobs/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "failed"
+    assert payload["mode"] == "missing"
+    assert payload["error"] == "Model stopped"
 
 
 def test_ask_stores_question_history_and_trip_detail_includes_it(client, monkeypatch):

@@ -11,6 +11,7 @@ import {
   exportTripMarkdown,
   exportTripZip,
   getJob,
+  getLatestTripJob,
   getTrip,
   importPhotos,
   listTrips,
@@ -143,7 +144,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
     }, 1200);
 
     return () => window.clearInterval(timer);
-  }, [activeJob?.id, activeJob?.status]);
+  }, [activeJob?.completed_steps, activeJob?.id, activeJob?.status]);
 
   const analysisRunning = activeJob ? isActiveJob(activeJob) : false;
   const hasAnalyzedPhotos = photos.some((photo) => photo.analysis !== null);
@@ -192,7 +193,10 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
   }
 
   async function loadTripDetail(tripId: number) {
-    const payload = await getTrip(tripId);
+    const [payload, latestJob] = await Promise.all([
+      getTrip(tripId),
+      getLatestTripJob(tripId)
+    ]);
     setSelectedTripDetail(payload);
     setTrips((current) =>
       current.map((trip) =>
@@ -207,6 +211,12 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           : trip
       )
     );
+    setActiveJob((current) => {
+      if (latestJob) {
+        return latestJob;
+      }
+      return current?.trip_id === tripId ? current : null;
+    });
   }
 
   async function refreshTripDetail(tripId: number) {
@@ -378,7 +388,7 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
       return;
     }
     const ok = window.confirm(
-      "Clear generated memories for this trip? Photos, favorites, and notes stay local."
+      "Clear generated memories, memory edits, and question history for this trip? Photos and favorites stay local."
     );
     if (!ok) {
       return;
@@ -434,8 +444,17 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
 
   async function pollJob(jobId: number) {
     await runAction(async () => {
+      const previousJob = activeJob;
       const job = await getJob(jobId);
+      const hasNewCompletedStep =
+        job.status === "running" &&
+        job.completed_steps > 0 &&
+        (previousJob?.id !== job.id ||
+          job.completed_steps !== previousJob.completed_steps);
       setActiveJob(job);
+      if (hasNewCompletedStep) {
+        await loadTripDetail(job.trip_id);
+      }
       if (job.status === "completed") {
         await loadTripDetail(job.trip_id);
         setActiveWorkspaceTab("read");
@@ -593,12 +612,13 @@ export function TripWorkspace({ health, healthError }: TripWorkspaceProps) {
           analyzedCount={analyzedCount}
           missingAnalysisCount={missingAnalysisCount}
           backendReady={Boolean(health)}
+          modelReady={Boolean(health?.model_available)}
           analyzeDisabled={
             selectedTripId === null ||
             busy ||
             analysisRunning ||
             photos.length === 0 ||
-            !health
+            !health?.model_available
           }
           job={activeJob}
           onAnalyze={handleAnalyze}

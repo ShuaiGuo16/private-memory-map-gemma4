@@ -6,6 +6,7 @@ import { TripWorkspace } from "../pages/TripWorkspace";
 export function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+  const modelReady = Boolean(health?.model_available);
 
   useEffect(() => {
     getHealth()
@@ -37,11 +38,18 @@ export function App() {
             <ShieldCheck size={16} aria-hidden="true" />
             <span>Private local workspace</span>
           </div>
-          <div className={`status-pill ${health ? "online" : "offline"}`}>
+          <div
+            className={`status-pill ${
+              health ? (modelReady ? "online" : "warning") : "offline"
+            }`}
+            title={health?.model_error ?? undefined}
+          >
             {health ? (
               <>
                 <Cpu size={16} aria-hidden="true" />
-                <span>{health.gemma_model}</span>
+                <span>
+                  {modelReady ? `${health.gemma_model} ready` : "Model not ready"}
+                </span>
               </>
             ) : (
               <>

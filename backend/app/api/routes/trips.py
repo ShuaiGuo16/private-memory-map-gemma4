@@ -8,6 +8,7 @@ from backend.app.api.serializers import photo_to_read
 from backend.app.db.models import AnalysisJob, Photo, PhotoAnalysis, Trip, TripMemory, TripQuestion
 from backend.app.db.session import get_session
 from backend.app.schemas.analysis import TripMemoryRead, TripMemoryUpdate
+from backend.app.schemas.job import AnalysisJobRead
 from backend.app.schemas.question import TripQuestionRead
 from backend.app.schemas.trip import TripCreate, TripDetail, TripRead, TripUpdate
 from backend.app.services.markdown_export import (
@@ -19,6 +20,7 @@ from backend.app.services.markdown_export import (
 from backend.app.services.storage import delete_trip_upload_dir
 
 router = APIRouter(prefix="/trips", tags=["trips"])
+RECOVERABLE_JOB_STATUSES = {"queued", "running", "cancel_requested", "failed", "canceled"}
 
 
 @router.post("", response_model=TripRead, status_code=status.HTTP_201_CREATED)
@@ -83,6 +85,22 @@ def get_trip(
     )
 
 
+@router.get("/{trip_id}/jobs/latest", response_model=AnalysisJobRead | None)
+def get_latest_trip_job(
+    trip: Trip = Depends(get_trip_or_404),
+    session: Session = Depends(get_session),
+) -> AnalysisJobRead | None:
+    job = session.exec(
+        select(AnalysisJob)
+        .where(
+            AnalysisJob.trip_id == int(trip.id),
+            AnalysisJob.status.in_(RECOVERABLE_JOB_STATUSES),
+        )
+        .order_by(AnalysisJob.updated_at.desc())
+    ).first()
+    return AnalysisJobRead.model_validate(job) if job is not None else None
+
+
 @router.patch("/{trip_id}/memory", response_model=TripMemoryRead)
 def update_trip_memory(
     payload: TripMemoryUpdate,
@@ -121,6 +139,10 @@ def clear_trip_analysis(
     memory = session.get(TripMemory, trip_id)
     if memory is not None:
         session.delete(memory)
+    for question in session.exec(
+        select(TripQuestion).where(TripQuestion.trip_id == trip_id)
+    ).all():
+        session.delete(question)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

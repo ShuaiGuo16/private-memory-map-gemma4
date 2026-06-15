@@ -17,7 +17,13 @@ import type {
   TripMemory
 } from "../../api/client";
 import { assetUrl } from "../../api/client";
-import { jobPercent, jobStage } from "../story/jobStatus";
+import {
+  jobDetail,
+  jobPercent,
+  jobRemaining,
+  jobStage,
+  jobStepCount
+} from "../story/jobStatus";
 
 type MemoryCompanionProps = {
   health: HealthResponse | null;
@@ -191,7 +197,13 @@ export function MemoryCompanion({
         <dl>
           <div>
             <dt>Model</dt>
-            <dd>{health?.gemma_model ?? "Offline"}</dd>
+            <dd>
+              {health
+                ? health.model_available
+                  ? health.gemma_model
+                  : health.model_status
+                : "Offline"}
+            </dd>
           </div>
           <div>
             <dt>Coordinates</dt>
@@ -213,6 +225,9 @@ export function MemoryCompanion({
 
 function CompanionProgress({ job }: { job: AnalysisJob }) {
   const percent = jobPercent(job);
+  const detail = jobDetail(job);
+  const stepCount = jobStepCount(job);
+  const remaining = jobRemaining(job);
 
   return (
     <div className={`companion-progress ${job.status}`}>
@@ -220,12 +235,16 @@ function CompanionProgress({ job }: { job: AnalysisJob }) {
         <strong>{jobStage(job)}</strong>
         <span>{percent}%</span>
       </div>
+      <p className="job-step-line">
+        {job.error ? <CircleAlert size={14} aria-hidden="true" /> : null}
+        {detail}
+      </p>
       <progress max={100} value={percent} />
-      {job.error ? (
-        <p>
-          <CircleAlert size={14} aria-hidden="true" />
-          {job.error}
-        </p>
+      {stepCount || remaining ? (
+        <div className="job-meta-row">
+          {stepCount ? <span>{stepCount}</span> : null}
+          {remaining ? <span>{remaining}</span> : null}
+        </div>
       ) : null}
     </div>
   );

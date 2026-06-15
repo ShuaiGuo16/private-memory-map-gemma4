@@ -5,6 +5,10 @@ export type HealthResponse = {
   status: string;
   app: string;
   gemma_model: string;
+  ollama_available: boolean;
+  model_available: boolean;
+  model_status: "ready" | "ollama_unavailable" | "model_missing" | string;
+  model_error: string | null;
   database: string;
   storage: string;
 };
@@ -148,6 +152,12 @@ export async function getTrip(tripId: number): Promise<TripDetail> {
   return request<TripDetail>(`/api/trips/${tripId}`);
 }
 
+export async function getLatestTripJob(
+  tripId: number
+): Promise<AnalysisJob | null> {
+  return request<AnalysisJob | null>(`/api/trips/${tripId}/jobs/latest`);
+}
+
 export async function createTrip(payload: {
   title: string;
   description?: string | null;
@@ -280,8 +290,7 @@ export async function exportTripMarkdown(
 ): Promise<{ filename: string; content: string }> {
   const response = await fetch(`${API_BASE_URL}/api/trips/${tripId}/export.md`);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    throw await responseError(response);
   }
   return {
     filename: attachmentFilename(response.headers.get("content-disposition")),
@@ -294,8 +303,7 @@ export async function exportTripZip(
 ): Promise<{ filename: string; blob: Blob }> {
   const response = await fetch(`${API_BASE_URL}/api/trips/${tripId}/export.zip`);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    throw await responseError(response);
   }
   return {
     filename: attachmentFilename(response.headers.get("content-disposition")),
@@ -318,8 +326,7 @@ function attachmentFilename(value: string | null): string {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, init);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    throw await responseError(response);
   }
   return response.json() as Promise<T>;
 }
@@ -327,7 +334,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 async function requestNoContent(path: string, init?: RequestInit): Promise<void> {
   const response = await fetch(`${API_BASE_URL}${path}`, init);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    throw await responseError(response);
   }
+}
+
+async function responseError(response: Response): Promise<Error> {
+  const text = await response.text();
+  if (!text) {
+    return new Error(response.statusText || `Request failed with ${response.status}`);
+  }
+
+  try {
+    const payload = JSON.parse(text) as { detail?: unknown };
+    if (typeof payload.detail === "string") {
+      return new Error(payload.detail);
+    }
+    if (Array.isArray(payload.detail)) {
+      const messages = payload.detail
+        .map((item) => {
+          if (item && typeof item === "object" && "msg" in item) {
+            return String((item as { msg: unknown }).msg);
+          }
+          return String(item);
+        })
+        .filter(Boolean);
+      if (messages.length > 0) {
+        return new Error(messages.join("; "));
+      }
+    }
+  } catch {
+    // Plain-text error responses are displayed as-is.
+  }
+
+  return new Error(text);
 }
